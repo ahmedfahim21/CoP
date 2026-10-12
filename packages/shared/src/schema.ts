@@ -22,6 +22,7 @@ export const ProjectileState = schema({
   id: t.string(),
   team: t.uint8(),
   sourceDefId: t.string(),
+  targetId: t.string(),
   x: t.float32(),
   y: t.float32(),
 }, 'ProjectileState');

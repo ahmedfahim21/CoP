@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
-import { CARDS, MSG, ROOM_NAME, type HandMessage, type MatchState, type StarterPick } from '@cop/shared';
+import { CARDS, MSG, ROOM_NAME, playCard, type HandMessage, type MatchState, type StarterPick } from '@cop/shared';
 import { createAppServer } from '../src/app.js';
 import { BattleRoom } from '../src/BattleRoom.js';
 import type { FetchFn } from '../src/sprites.js';
@@ -175,6 +175,23 @@ describe('play', () => {
     a.send(MSG.play, message);
     expect(await reply).toEqual({ error });
     expect(snapshot(room)).toEqual(before);
+  });
+
+  it('syncs projectiles with their source and target', async () => {
+    const { room } = await startMatch();
+    freezeInPlay(room);
+    const match = matchOf(room);
+    match.players[1].elixir = 10;
+    const played = playCard(match, 1, 0, { x: 9, y: 20 });
+    if (!played.ok) throw new Error(played.error);
+    // Park the unit in front of team 0's left tower (Bulbasaur) so the tower opens fire.
+    const unit = played.units[0]!;
+    Object.assign(unit, { x: 3.5, y: 20.5, deployTimer: 5 });
+    for (let i = 0; i < 40 && room.state.projectiles.size === 0; i++) room['tick'](0.05);
+    const shots = [...room.state.projectiles.values()].map((p) => p.toJSON());
+    expect(shots).toHaveLength(1);
+    expect(shots[0]).toMatchObject({ team: 0, sourceDefId: 'bulbasaur', targetId: unit.id });
+    expect(typeof shots[0]!.x).toBe('number');
   });
 
   it('rejects plays without enough elixir', async () => {

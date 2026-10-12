@@ -174,7 +174,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
         existing.x = p.x;
         existing.y = p.y;
       } else {
-        s.projectiles.set(p.id, new ProjectileState({ id: p.id, team: p.team, sourceDefId: p.sourceDefId, x: p.x, y: p.y }));
+        s.projectiles.set(p.id, new ProjectileState({ id: p.id, team: p.team, sourceDefId: p.sourceDefId, targetId: p.targetId, x: p.x, y: p.y }));
       }
     }
     for (const id of [...s.projectiles.keys()]) if (!flying.has(id)) s.projectiles.delete(id);
