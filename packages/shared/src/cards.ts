@@ -131,7 +131,7 @@ export const CARDS: Record<CardId, CardDef> = {
   gengar: {
     id: 'gengar', name: 'Gengar', dex: 94, cost: 3, count: 1, rarity: 'epic',
     special: { name: 'Shadow', text: 'Invisible and untargetable until it strikes; slashes everything nearby.' },
-    stats: { ...MELEE, hp: 850, damage: 190, hitSpeed: 1.8, range: 0.8, speed: 1.5, radius: 0.5, flying: false, targets: 'ground', types: ['ghost', 'poison'], move: { name: 'Shadow Punch', type: 'ghost' }, splashRadius: 1, ability: { kind: 'shadow', revealSeconds: 1.4 } },
+    stats: { ...MELEE, hp: 850, damage: 190, hitSpeed: 1.8, range: 0.8, speed: 1.5, radius: 0.5, flying: false, targets: 'ground', types: ['ghost', 'poison'], move: { name: 'Shadow Punch', type: 'ghost' }, splashRadius: 1, ability: { kind: 'shadow', revealSeconds: 0.8 } },
   },
   chansey: {
     id: 'chansey', name: 'Chansey', dex: 113, cost: 4, count: 1, rarity: 'rare',

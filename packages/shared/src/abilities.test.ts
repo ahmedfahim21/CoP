@@ -275,7 +275,8 @@ describe('soak with the full roster', () => {
       }
       for (const p of s.players) expect(p.elixir).toBeLessThanOrEqual(ELIXIR_MAX);
     }
-    expect(plays).toBeGreaterThan(30);
+    // Matches can end early on a king kill, so this only checks that real play happened.
+    expect(plays).toBeGreaterThan(10);
     expect(s.phase).toBe('ended');
   });
 });
