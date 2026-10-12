@@ -39,8 +39,8 @@ export function buildCharmander(): Rig {
   const tail2 = k.joint(tail1, [0, 0.26, 0], [1.0, 0, 0]);
   k.capsule(tail2, 0.055, 0.12, ORANGE, [0, 0.09, 0]);
   const flame = k.joint(tail2, [0, 0.22, 0], [0.6, 0, 0]);
-  const outer = k.ownMat(0xff7a1a, { emissive: 0xff5a00, emissiveIntensity: 1.6, roughness: 1 });
-  const inner = k.ownMat(0xffe27a, { emissive: 0xffd040, emissiveIntensity: 2, roughness: 1 });
+  const outer = k.ownMat(0xff8c1a, { emissive: 0xff6a00, emissiveIntensity: 0.9, roughness: 1 });
+  const inner = k.ownMat(0xffe07a, { emissive: 0xffc030, emissiveIntensity: 1.1, roughness: 1 });
   k.cone(flame, 0.08, 0.24, outer, [0, 0.1, 0]).castShadow = false;
   k.cone(flame, 0.045, 0.16, inner, [0, 0.07, 0.015]).castShadow = false;
   const muzzle = k.joint(head, [0, 0.0, 0.32]);

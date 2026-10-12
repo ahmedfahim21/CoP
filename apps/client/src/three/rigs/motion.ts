@@ -86,3 +86,30 @@ export function faintPose(root: THREE.Object3D, body: THREE.Object3D, p: Pose): 
   root.scale.setScalar(1 - clamp01((p.faint - 0.7) / 0.3) * 0.6);
   return p.faint >= 1;
 }
+
+/**
+ * Gallop for horses, bulls and foxes: front legs reach together, hind legs drive together half
+ * a beat later, and the body rocks nose-up / nose-down with each bound.
+ */
+export function gallop(
+  j: { body: THREE.Object3D; legFL: THREE.Object3D; legFR: THREE.Object3D; legBL: THREE.Object3D; legBR: THREE.Object3D; head?: THREE.Object3D },
+  p: Pose,
+  o: { swing?: number; bob?: number; baseY?: number; tuck?: number } = {},
+) {
+  const k = strideAmount(p);
+  const a = (o.swing ?? 0.8) * k;
+  const front = Math.sin(p.walk);
+  const back = Math.sin(p.walk - 1.2);
+  // Airborne (a leap): legs fold under the body instead of striding.
+  const tuck = clamp01(p.airborne) * (o.tuck ?? 1);
+  j.legFL.rotation.x = front * a * (1 - tuck) - tuck * 1.1;
+  j.legFR.rotation.x = Math.sin(p.walk + 0.35) * a * (1 - tuck) - tuck * 1.1;
+  j.legBL.rotation.x = back * a * (1 - tuck) + tuck * 1.0;
+  j.legBR.rotation.x = Math.sin(p.walk - 0.85) * a * (1 - tuck) + tuck * 1.0;
+  j.body.position.y = (o.baseY ?? 0) + Math.max(0, Math.sin(p.walk + 0.6)) * (o.bob ?? 0.08) * k;
+  j.body.rotation.x = Math.sin(p.walk + 1.6) * 0.09 * k - tuck * 0.15;
+  if (j.head) j.head.rotation.x = -Math.sin(p.walk + 1.6) * 0.1 * k;
+}
+
+/** A flame that never sits still: returns a vertical stretch factor. */
+export const flicker = (t: number, seed = 0) => 1 + Math.sin(t * 21 + seed) * 0.13 + Math.sin(t * 34 + seed * 2) * 0.08;

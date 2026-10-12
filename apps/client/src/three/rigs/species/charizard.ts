@@ -53,8 +53,8 @@ export function buildCharizard(): Rig {
   const tail2 = k.joint(tail1, [0, 0.34, 0], [-0.6, 0, 0]);
   k.capsule(tail2, 0.07, 0.2, ORANGE, [0, 0.14, 0]);
   const flame = k.joint(tail2, [0, 0.32, 0]);
-  const flameOuter = k.ownMat(0xff7a1a, { emissive: 0xff5a00, emissiveIntensity: 1.6, roughness: 1 });
-  const flameInner = k.ownMat(0xffe27a, { emissive: 0xffd040, emissiveIntensity: 2, roughness: 1 });
+  const flameOuter = k.ownMat(0xff8c1a, { emissive: 0xff6a00, emissiveIntensity: 0.9, roughness: 1 });
+  const flameInner = k.ownMat(0xffe07a, { emissive: 0xffc030, emissiveIntensity: 1.1, roughness: 1 });
   const f1 = k.cone(flame, 0.11, 0.3, flameOuter, [0, 0.12, 0]);
   const f2 = k.cone(flame, 0.06, 0.2, flameInner, [0, 0.08, 0.02]);
   f1.castShadow = false;

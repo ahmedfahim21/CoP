@@ -23,11 +23,17 @@ export interface Pose {
   faint: number;
   /** Kings before they wake up. */
   dormant: boolean;
+  /** Take Down primed: head down, full gallop. */
+  charging: boolean;
+  /** 0 on the ground, 1 at the top of a river leap. */
+  airborne: number;
+  /** 1 when a special ability fires (heal pulse, evolution glow), decaying to 0. */
+  special: number;
 }
 
-export const restPose = (): Pose => ({ t: 0, speed: 0, walk: 0, attack: -1, hit: 0, land: 0, faint: -1, dormant: false });
+export const restPose = (): Pose => ({ t: 0, speed: 0, walk: 0, attack: -1, hit: 0, land: 0, faint: -1, dormant: false, charging: false, airborne: 0, special: 0 });
 
-export type AttackStyle = 'bite' | 'punch' | 'slam' | 'cast' | 'breath' | 'explode' | 'throw' | 'wing';
+export type AttackStyle = 'bite' | 'punch' | 'slam' | 'cast' | 'breath' | 'explode' | 'throw' | 'wing' | 'spin' | 'splash' | 'beam' | 'kick';
 
 export interface Rig {
   /** Positioned and yawed by the owner. The model faces +Z. */
@@ -42,8 +48,8 @@ export interface Rig {
   /** Seconds the attack animation takes. */
   attackDuration: number;
   animate(p: Pose, dt: number): void;
-  /** 0..1 white flash over the whole model. */
-  flash(amount: number): void;
+  /** 0..1 flash over the whole model, white unless a colour is given (icy blue when chilled). */
+  flash(amount: number, color?: number): void;
   /** Fade the model out (0..1 opacity). */
   fade(opacity: number): void;
   dispose(): void;
@@ -194,9 +200,10 @@ export class Kit {
     return typeof color === 'number' ? this.mat(color, o) : color;
   }
 
-  flash(amount: number) {
+  flash(amount: number, color?: number) {
+    const target = color === undefined ? WHITE : TINT.set(color);
     for (const [m, base] of this.baseEmissive) {
-      m.emissive.copy(base).lerp(WHITE, amount);
+      m.emissive.copy(base).lerp(target, amount);
     }
   }
 
@@ -214,6 +221,7 @@ export class Kit {
 }
 
 const WHITE = new THREE.Color(0xffffff);
+const TINT = new THREE.Color();
 
 export interface RigParts {
   height: number;
@@ -234,7 +242,7 @@ export function finishRig(kit: Kit, parts: RigParts): Rig {
     attackStyle: parts.attackStyle,
     attackDuration: parts.attackDuration ?? 0.5,
     animate: parts.animate,
-    flash: (a) => kit.flash(a),
+    flash: (a, c) => kit.flash(a, c),
     fade: (o) => kit.fade(o),
     dispose: () => kit.dispose(),
   };
