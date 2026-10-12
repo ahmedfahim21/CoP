@@ -1,0 +1,9 @@
+#sandbox { position: fixed; inset: 0; display: grid; grid-template-rows: 1fr auto; background: #2f6b22; }
+#sandbox .stage-wrap { position: relative; }
+#sandbox .stage-host, #sandbox .text-layer { position: absolute; inset: 0; }
+#sandbox .text-layer { pointer-events: none; overflow: hidden; }
+.sandbox-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: linear-gradient(180deg, #2c3d75, #1f2c5a); border-top: 3px solid var(--ink); }
+.sandbox-bar .btn { font-size: 14px; padding: 6px 10px 8px; }
+.sandbox-bar .btn[aria-pressed='true'] { background: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, #f39a12); }
+.sandbox-note { position: absolute; left: 8px; top: 8px; max-width: 70%; background: rgba(10,10,30,0.75); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; font-size: 14px; pointer-events: none; }
+.sandbox-note small { display: block; font-size: 12px; color: #c9c4ff; -webkit-text-stroke: 0; }
