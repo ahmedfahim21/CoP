@@ -108,7 +108,12 @@ export class BattleRoom extends Room<{ state: BattleState }> {
     if (!isPlayMessage(message)) return this.sendError(client, 'bad-message');
 
     const result = playCard(this.match, team, message.slot, { x: message.x, y: message.y });
-    if (!result.ok) return this.sendError(client, result.error);
+    const where = `slot ${message.slot} at (${message.x.toFixed(1)}, ${message.y.toFixed(1)})`;
+    if (!result.ok) {
+      logger.info(`[room ${this.roomId}] team ${team} play rejected: ${result.error} — ${where}`);
+      return this.sendError(client, result.error);
+    }
+    logger.info(`[room ${this.roomId}] team ${team} played ${result.units[0]!.defId} — ${where}`);
     this.syncState();
     this.broadcast(MSG.fx, this.match.events);
     this.match.events = [];
