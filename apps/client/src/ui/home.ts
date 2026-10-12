@@ -1,5 +1,5 @@
 import { Bird, Castle, Crosshair, Footprints, Heart, Layers, Pencil, Shield, Sparkles, Swords, Target, Timer, Users, Zap } from 'lucide';
-import { CARDS, DEFAULT_DECK, STARTERS, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type StarterId, type StarterPick } from '@cop/shared';
+import { CARDS, CARD_IDS, FORMS, STARTERS, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type StarterId, type StarterPick } from '@cop/shared';
 import { ALL_STARTERS, savePrefs, type Prefs } from '../prefs.js';
 import { createDiorama } from '../three/diorama.js';
 import { trainerSpriteUrl } from '../config.js';
@@ -143,18 +143,57 @@ export class Home {
   // --- Cards tab ---
 
   private buildCards(): HTMLDivElement {
-    const avg = DEFAULT_DECK.reduce((s, id) => s + CARDS[id].cost, 0) / DEFAULT_DECK.length;
-    const grid = h('div', { class: 'deck-grid' });
-    for (const id of DEFAULT_DECK) {
-      const c = cardEl(id, { count: true });
-      c.addEventListener('click', () => showCardDetail(id));
-      grid.append(c);
-    }
-    return h('div', { class: 'tab-panel' },
-      h('div', { class: 'deck-head' }, h('h2', { textContent: 'Battle Deck' }), h('div', { class: 'avg stroke' }, dropEl(avg.toFixed(1)), 'Avg. elixir')),
-      grid,
-      h('div', { class: 'hint', textContent: 'Tap a card to see its stats and move.' }),
-    );
+    const panel = h('div', { class: 'tab-panel' });
+    /** A collection card picked with "Use", waiting for the deck slot it replaces. */
+    let pending: CardId | null = null;
+    const render = () => {
+      const deck = this.prefs.deck;
+      const avg = deck.reduce((sum, id) => sum + CARDS[id].cost, 0) / deck.length;
+      const grid = h('div', { class: pending ? 'deck-grid swapping' : 'deck-grid' });
+      for (const id of deck) {
+        const c = cardEl(id, { count: true });
+        c.addEventListener('click', () => {
+          if (pending) {
+            this.prefs.deck = deck.map((d) => (d === id ? pending! : d));
+            savePrefs(this.prefs);
+            pending = null;
+            render();
+          } else {
+            showCardDetail(id, null);
+          }
+        });
+        grid.append(c);
+      }
+      const rest = CARD_IDS.filter((id) => !deck.includes(id));
+      const collection = h('div', { class: 'deck-grid' });
+      for (const id of rest) {
+        const c = cardEl(id, { count: true });
+        if (pending === id) c.classList.add('picked');
+        c.addEventListener('click', () => showCardDetail(id, () => {
+          pending = id;
+          render();
+        }));
+        collection.append(c);
+      }
+      const cancel = h('button', { class: 'btn small' }, 'Cancel');
+      cancel.addEventListener('click', () => {
+        pending = null;
+        render();
+      });
+      const parts: Array<HTMLElement | null> = [
+        h('div', { class: 'deck-head' }, h('h2', { textContent: 'Battle Deck' }), h('div', { class: 'avg stroke' }, dropEl(avg.toFixed(1)), 'Avg. elixir')),
+        pending
+          ? h('div', { class: 'swap-banner' }, cardEl(pending), h('div', { class: 'stroke', textContent: `Tap a card in your deck to swap in ${CARDS[pending].name}` }), cancel)
+          : null,
+        grid,
+        h('div', { class: 'collection-head' }, h('h2', { textContent: 'Card Collection' }), h('div', { class: 'found stroke', textContent: `Found: ${CARD_IDS.length}/${CARD_IDS.length}` })),
+        collection,
+        h('div', { class: 'hint', textContent: 'Tap a card for its stats and speciality.' }),
+      ];
+      panel.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
+    };
+    render();
+    return panel;
   }
 
   // --- Towers tab ---
@@ -221,19 +260,28 @@ function typePills(types: readonly string[]): HTMLDivElement {
 const TARGETS: Record<string, string> = { ground: 'Ground', 'air-ground': 'Air & ground', buildings: 'Towers only' };
 const speedName = (s: number) => (s >= 2 ? 'Very fast' : s >= 1.5 ? 'Fast' : s >= 1 ? 'Medium' : 'Slow');
 
-function showCardDetail(id: CardId) {
+/** Card stats; `onUse` adds a "Use" button for cards outside the deck. */
+function showCardDetail(id: CardId, onUse: (() => void) | null) {
   const def = CARDS[id];
   const s = def.stats;
+  const evolvesInto = s.ability?.kind === 'evolve' ? FORMS[s.ability.into] : null;
   const stat = (ic: Parameters<typeof icon>[0], k: string, v: string) => h('div', { class: 'stat' }, icon(ic), h('div', {}, h('div', { class: 'k', textContent: k }), h('div', { class: 'v stroke', textContent: v })));
-  const close = h('button', { class: 'btn gold' }, 'OK');
+  const close = h('button', { class: onUse ? 'btn' : 'btn gold' }, 'OK');
+  const use = onUse ? h('button', { class: 'btn gold' }, 'Use') : null;
   const card = cardEl(id, { count: true });
   const backdrop = h('div', { class: 'modal-backdrop' },
     h('div', { class: 'modal', attrs: { role: 'dialog', 'aria-label': def.name } },
       h('div', { class: 'modal-head' }, card, h('div', {}, h('h2', { textContent: def.name }), typePills(s.types))),
-      h('div', { class: 'move-line stroke' }, icon(Sparkles), `${s.move.name}`, h('span', { class: 'type-pill', data: { type: s.move.type }, textContent: s.move.type })),
+      def.special
+        ? h('div', { class: 'special' },
+          h('div', { class: 'special-name stroke' }, icon(Sparkles), def.special.name),
+          h('div', { class: 'special-text', textContent: def.special.text }),
+          evolvesInto ? h('div', { class: 'special-text', textContent: `Evolves into ${evolvesInto.name}: ${evolvesInto.stats.hp} HP, ${evolvesInto.stats.move.name} for ${evolvesInto.stats.damage} area damage.` }) : null)
+        : null,
+      h('div', { class: 'move-line stroke' }, icon(Swords), `${s.move.name}`, h('span', { class: 'type-pill', data: { type: s.move.type }, textContent: s.move.type })),
       h('div', { class: 'stats' },
         stat(Heart, 'Hitpoints', String(s.hp)),
-        stat(Zap, s.splashRadius > 0 ? 'Area damage' : 'Damage', String(s.damage)),
+        stat(Zap, s.splashRadius > 0 ? 'Area damage' : 'Damage', s.ability?.kind === 'ramp' ? `${s.damage}→${s.damage * s.ability.multipliers[s.ability.multipliers.length - 1]!}` : String(s.damage)),
         stat(Timer, 'Hit speed', `${s.hitSpeed}s`),
         stat(Crosshair, 'Range', s.range >= 2 ? `${s.range}` : 'Melee'),
         stat(Footprints, 'Speed', speedName(s.speed)),
@@ -241,11 +289,15 @@ function showCardDetail(id: CardId) {
         stat(Shield, 'Count', def.count > 1 ? `×${def.count}` : '1'),
         stat(Bird, 'Flying', s.flying ? 'Yes' : 'No'),
       ),
-      close,
+      h('div', { class: 'row' }, close, use),
     ),
   );
   const dismiss = () => backdrop.remove();
   close.addEventListener('click', dismiss);
+  use?.addEventListener('click', () => {
+    dismiss();
+    onUse!();
+  });
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) dismiss();
   });

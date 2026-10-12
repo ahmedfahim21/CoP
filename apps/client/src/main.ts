@@ -31,11 +31,7 @@ async function connect(mode: Mode) {
   setOverlay(matchmakingOverlay({ code: null, joining: typeof mode === 'object', onCancel: cancel }));
   let s: Session;
   try {
-    s = mode === 'quick'
-      ? await quickMatch(prefs.starters, prefs.name)
-      : mode === 'create'
-        ? await createPrivate(prefs.starters, prefs.name)
-        : await joinByCode(mode.code, prefs.starters, prefs.name);
+    s = mode === 'quick' ? await quickMatch(prefs) : mode === 'create' ? await createPrivate(prefs) : await joinByCode(mode.code, prefs);
   } catch (err) {
     console.error('Joining a battle failed', err);
     setOverlay(null);

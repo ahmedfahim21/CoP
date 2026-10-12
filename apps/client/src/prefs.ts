@@ -1,12 +1,13 @@
-import { STARTER_IDS, isStarterPick, sanitizeTrainerName, type StarterPick } from '@cop/shared';
+import { DEFAULT_DECK, STARTER_IDS, isDeck, isStarterPick, sanitizeTrainerName, type CardId, type StarterPick } from '@cop/shared';
 
 export interface Prefs {
   name: string;
   starters: StarterPick;
+  deck: CardId[];
 }
 
 const KEY = 'cop:prefs';
-const DEFAULTS: Prefs = { name: 'Trainer', starters: ['charmander', 'squirtle'] };
+const DEFAULTS: Prefs = { name: 'Trainer', starters: ['charmander', 'squirtle'], deck: [...DEFAULT_DECK] };
 
 /** Local conveniences only; a failed read just means defaults. */
 export function loadPrefs(): Prefs {
@@ -15,10 +16,11 @@ export function loadPrefs(): Prefs {
     return {
       name: sanitizeTrainerName(raw?.name ?? DEFAULTS.name),
       starters: isStarterPick(raw?.starters) ? raw.starters : DEFAULTS.starters,
+      deck: isDeck(raw?.deck) ? raw.deck : [...DEFAULTS.deck],
     };
   } catch (err) {
     console.warn('Could not read saved preferences', err);
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, deck: [...DEFAULTS.deck] };
   }
 }
 
