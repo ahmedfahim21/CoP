@@ -1,6 +1,6 @@
 import { Room, ServerError, logger, type Client } from 'colyseus';
 import {
-  MSG, createMatch, forfeit, isDoubleElixir, isStarterPick, playCard, step,
+  MSG, createMatch, forfeit, isDoubleElixir, isStarterPick, playCard, sanitizeTrainerName, step,
   type ErrorMessage, type HandMessage, type JoinOptions, type MatchState, type PlayMessage, type StarterPick, type Team,
 } from '@cop/shared';
 import { BattleState, EntityState, PlayerInfo, ProjectileState } from '@cop/shared/schema';
@@ -34,7 +34,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
     this.teams.set(client.sessionId, team);
     this.picks[team] = options.starters;
     this.state.players.set(client.sessionId, new PlayerInfo({
-      sessionId: client.sessionId, team, elixir: 0, crowns: 0,
+      sessionId: client.sessionId, name: sanitizeTrainerName(options.name), team, elixir: 0, crowns: 0,
       starterLeft: options.starters[0], starterRight: options.starters[1], connected: true,
     }));
     logger.info(`[room ${this.roomId}] ${client.sessionId} joined as team ${team}`);

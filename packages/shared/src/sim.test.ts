@@ -274,6 +274,34 @@ describe('combat', () => {
     for (const h of hits) expect(h).toMatchObject({ damage: 140, effectiveness: 'neutral' });
   });
 
+  it('announces every attack with attacker and target, before its hit', () => {
+    const s = started();
+    onlyUnits(s);
+    const [machop] = spawn(s, 0, 'machop', { x: 9, y: 20 });
+    const [rattata] = spawn(s, 1, 'rattata', { x: 9, y: 20 });
+    s.entities = s.entities.filter((e) => e.kind !== 'unit' || e.id === machop!.id || e.id === rattata!.id);
+    Object.assign(machop!, { x: 9, y: 20, deployTimer: 0 });
+    Object.assign(rattata!, { x: 9, y: 21, deployTimer: 5 });
+    const events = runUntil(s, (ev) => ev.some((e) => e.type === 'attack'));
+    const attackAt = events.findIndex((e) => e.type === 'attack');
+    expect(events[attackAt]).toEqual({ type: 'attack', id: machop!.id, targetId: rattata!.id });
+    // Melee lands in the same step, after the announcement.
+    expect(events.findIndex((e) => e.type === 'hit')).toBeGreaterThan(attackAt);
+  });
+
+  it('ranged attacks are announced when fired, hits arrive with the projectile', () => {
+    const s = started();
+    onlyUnits(s);
+    const [pikachu] = spawn(s, 0, 'pikachu', { x: 9, y: 24 });
+    const [machop] = spawn(s, 1, 'machop', { x: 9, y: 20 });
+    Object.assign(pikachu!, { x: 9, y: 24, deployTimer: 0 });
+    Object.assign(machop!, { x: 9, y: 20, deployTimer: 5 });
+    const fired = runUntil(s, (ev) => ev.some((e) => e.type === 'attack'));
+    expect(fired.some((e) => e.type === 'hit')).toBe(false);
+    expect(s.projectiles).toHaveLength(1);
+    runUntil(s, (ev) => ev.some((e) => e.type === 'hit'));
+  });
+
   it('Voltorb self-destructs on its first attack', () => {
     const s = started();
     onlyUnits(s);

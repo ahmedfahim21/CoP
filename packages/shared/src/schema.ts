@@ -29,6 +29,7 @@ export type ProjectileState = SchemaType<typeof ProjectileState>;
 
 export const PlayerInfo = schema({
   sessionId: t.string(),
+  name: t.string(),
   team: t.uint8(),
   elixir: t.float32(),
   crowns: t.uint8(),

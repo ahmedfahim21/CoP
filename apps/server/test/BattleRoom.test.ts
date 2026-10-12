@@ -32,7 +32,7 @@ function matchOf(room: BattleRoom): MatchState {
 async function startMatch() {
   const handA = { value: null as HandMessage | null };
   const handB = { value: null as HandMessage | null };
-  const a = await colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: RED });
+  const a = await colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: RED, name: '  Ash\u0007 Ketchum of Pallet Town ' });
   a.onMessage(MSG.hand, (m: HandMessage) => (handA.value = m));
   const b = await colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: BLUE });
   b.onMessage(MSG.hand, (m: HandMessage) => (handB.value = m));
@@ -65,10 +65,10 @@ describe('matchmaking', () => {
     expect(state.winner).toBe(-1);
     expect(state.resultReason).toBe('');
     expect(state.players[a.sessionId]).toEqual({
-      sessionId: a.sessionId, team: 0, elixir: 5, crowns: 0, starterLeft: 'bulbasaur', starterRight: 'charmander', connected: true,
+      sessionId: a.sessionId, name: 'Ash Ketchum of P', team: 0, elixir: 5, crowns: 0, starterLeft: 'bulbasaur', starterRight: 'charmander', connected: true,
     });
     expect(state.players[b.sessionId]).toEqual({
-      sessionId: b.sessionId, team: 1, elixir: 5, crowns: 0, starterLeft: 'squirtle', starterRight: 'charmander', connected: true,
+      sessionId: b.sessionId, name: 'Trainer', team: 1, elixir: 5, crowns: 0, starterLeft: 'squirtle', starterRight: 'charmander', connected: true,
     });
     const towers = Object.values(state.entities);
     expect(towers).toHaveLength(6);
@@ -167,6 +167,8 @@ describe('play', () => {
   ])('rejects %s with an error and no state change', async (error, message) => {
     const { a, room } = await startMatch();
     freezeInPlay(room);
+    // Enough for any card, so the hand's random order can't trip the elixir check first.
+    matchOf(room).players[0].elixir = 10;
     room['syncState']();
     const before = snapshot(room);
     const reply = a.waitForMessage(MSG.error);

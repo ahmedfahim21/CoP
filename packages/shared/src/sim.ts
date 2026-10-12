@@ -66,6 +66,8 @@ export interface MatchResult {
 }
 
 export type GameEvent =
+  /** An attack starts: drives wind-up animations. Ranged hits land later, when the projectile arrives. */
+  | { type: 'attack'; id: string; targetId: string }
   | { type: 'hit'; targetId: string; x: number; y: number; damage: number; effectiveness: Effectiveness }
   | { type: 'death'; id: string; kind: EntityKind; team: Team; x: number; y: number }
   | { type: 'spawn'; team: Team; cardId: CardId; x: number; y: number };
@@ -354,6 +356,7 @@ function moveToward(e: Entity, to: Point, maxStep: number): void {
 function attack(state: MatchState, attacker: Entity, target: Entity): void {
   const stats = statsOf(attacker);
   attacker.cooldown = stats.hitSpeed;
+  state.events.push({ type: 'attack', id: attacker.id, targetId: target.id });
   if (stats.kamikaze) {
     applyDamage(state, attacker, target, target);
     attacker.hp = 0;
