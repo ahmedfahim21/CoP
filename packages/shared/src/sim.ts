@@ -156,14 +156,20 @@ function emptyPlayer(starters: StarterPick): PlayerState {
 
 export type PlayError = 'not-playing' | 'bad-slot' | 'not-enough-elixir' | 'bad-position';
 
-/** Lanes (from `team`'s perspective) where the enemy princess tower has fallen. */
-export function openPockets(state: MatchState, team: Team): Set<Lane> {
-  const enemy = (1 - team) as Team;
+/**
+ * Lanes (from `team`'s perspective) where the enemy princess tower has fallen.
+ * Takes plain entities so the client can run it on network state too.
+ */
+export function openPocketsFrom(entities: Iterable<{ team: number; kind: string; x: number; y: number }>, team: Team): Set<Lane> {
   const open = new Set<Lane>(['left', 'right']);
-  for (const e of state.entities) {
-    if (e.team === enemy && e.kind === 'princess') open.delete(laneOf(mirror(team, e).x));
+  for (const e of entities) {
+    if (e.team !== team && e.kind === 'princess') open.delete(laneOf(mirror(team, e).x));
   }
   return open;
+}
+
+export function openPockets(state: MatchState, team: Team): Set<Lane> {
+  return openPocketsFrom(state.entities, team);
 }
 
 const FORMATIONS: Record<number, readonly Point[]> = {
