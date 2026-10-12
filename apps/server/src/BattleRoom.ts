@@ -1,7 +1,7 @@
 import { Room, ServerError, logger, type Client } from 'colyseus';
 import {
-  MSG, createMatch, forfeit, isDoubleElixir, isStarterPick, playCard, sanitizeTrainerName, step,
-  type ErrorMessage, type HandMessage, type JoinOptions, type MatchState, type PlayMessage, type StarterPick, type Team,
+  DEFAULT_DECK, MSG, createMatch, forfeit, isCharging, isDeck, isDoubleElixir, isStarterPick, playCard, sanitizeTrainerName, step,
+  type CardId, type ErrorMessage, type HandMessage, type JoinOptions, type MatchState, type PlayMessage, type StarterPick, type Team,
 } from '@cop/shared';
 import { BattleState, EntityState, PlayerInfo, ProjectileState } from '@cop/shared/schema';
 
@@ -21,6 +21,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
   private match: MatchState | null = null;
   private readonly teams = new Map<string, Team>();
   private readonly picks: [StarterPick | null, StarterPick | null] = [null, null];
+  private readonly decks: [readonly CardId[], readonly CardId[]] = [DEFAULT_DECK, DEFAULT_DECK];
 
   async onCreate(options: Partial<JoinOptions>) {
     this.setPatchRate(TICK_MS);
@@ -30,9 +31,11 @@ export class BattleRoom extends Room<{ state: BattleState }> {
 
   onJoin(client: Client, options: Partial<JoinOptions>) {
     if (!isStarterPick(options.starters)) throw new ServerError(400, 'Pick two different starters');
+    if (options.deck !== undefined && !isDeck(options.deck)) throw new ServerError(400, 'A deck is eight different cards');
     const team: Team = this.picks[0] === null ? 0 : 1;
     this.teams.set(client.sessionId, team);
     this.picks[team] = options.starters;
+    this.decks[team] = options.deck ?? DEFAULT_DECK;
     this.state.players.set(client.sessionId, new PlayerInfo({
       sessionId: client.sessionId, name: sanitizeTrainerName(options.name), team, elixir: 0, crowns: 0,
       starterLeft: options.starters[0], starterRight: options.starters[1], connected: true,
@@ -84,7 +87,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
 
   private async startMatch() {
     await this.lock();
-    this.match = createMatch([this.picks[0]!, this.picks[1]!], Math.floor(Math.random() * 2 ** 31));
+    this.match = createMatch([this.picks[0]!, this.picks[1]!], Math.floor(Math.random() * 2 ** 31), this.decks);
     this.syncState();
     for (const client of this.clients) this.sendHand(client);
     this.setSimulationInterval((dtMs) => this.tick(Math.min(dtMs / 1000, MAX_DT)), TICK_MS);
@@ -157,10 +160,18 @@ export class BattleRoom extends Room<{ state: BattleState }> {
         existing.hp = Math.max(0, Math.ceil(e.hp));
         existing.deploying = e.deployTimer > 0;
         existing.active = e.active;
+        // Evolution changes species and health pool in place.
+        existing.defId = e.defId;
+        existing.maxHp = e.maxHp;
+        existing.hidden = e.hidden;
+        existing.stunned = e.stun > 0;
+        existing.slowed = e.slow > 0;
+        existing.charging = isCharging(e);
       } else {
         s.entities.set(e.id, new EntityState({
           id: e.id, team: e.team, kind: e.kind, defId: e.defId, x: e.x, y: e.y,
           hp: Math.ceil(e.hp), maxHp: e.maxHp, deploying: e.deployTimer > 0, active: e.active,
+          hidden: e.hidden, stunned: e.stun > 0, slowed: e.slow > 0, charging: isCharging(e),
         }));
       }
     }

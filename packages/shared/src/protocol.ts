@@ -12,6 +12,8 @@ export interface JoinOptions {
   starters: StarterPick;
   /** Shown to the opponent. Trimmed and capped server-side; empty falls back to "Trainer". */
   name?: string;
+  /** Eight different cards; omitted means the default deck. */
+  deck?: CardId[];
   /** Only meaningful on create: hides the room from quick match; join by its id instead. */
   private?: boolean;
 }

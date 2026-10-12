@@ -15,6 +15,12 @@ export const EntityState = schema({
   maxHp: t.int32(),
   deploying: t.boolean(),
   active: t.boolean(),
+  /** Tunnelling or cloaked: untargetable. */
+  hidden: t.boolean(),
+  stunned: t.boolean(),
+  slowed: t.boolean(),
+  /** Take Down primed. */
+  charging: t.boolean(),
 }, 'EntityState');
 export type EntityState = SchemaType<typeof EntityState>;
 

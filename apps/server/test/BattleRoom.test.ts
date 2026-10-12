@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
-import { CARDS, MSG, ROOM_NAME, playCard, type HandMessage, type MatchState, type StarterPick } from '@cop/shared';
+import { CARDS, CARD_IDS, MSG, ROOM_NAME, playCard, type HandMessage, type MatchState, type StarterPick } from '@cop/shared';
 import { createAppServer } from '../src/app.js';
 import { BattleRoom } from '../src/BattleRoom.js';
 import type { FetchFn } from '../src/sprites.js';
@@ -95,6 +95,25 @@ describe('matchmaking', () => {
     await expect(colyseus.sdk.joinById(a.roomId, { starters: RED })).rejects.toThrow();
     await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: ['bulbasaur', 'bulbasaur'] })).rejects.toThrow(/starters/);
     await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, {})).rejects.toThrow(/starters/);
+  });
+
+  it('deals each player from their own deck, and rejects bad decks', async () => {
+    const deckA = ['magikarp', 'geodude', 'dugtrio', 'gengar', 'chansey', 'scyther', 'jolteon', 'rapidash'] as const;
+    const a = await colyseus.sdk.create(ROOM_NAME, { starters: RED, deck: [...deckA], private: true });
+    const handA = { value: null as HandMessage | null };
+    a.onMessage(MSG.hand, (m: HandMessage) => (handA.value = m));
+    const b = await colyseus.sdk.joinById(a.roomId, { starters: BLUE });
+    b.onMessage(MSG.hand, () => undefined);
+    const room = colyseus.getRoomById<BattleRoom>(a.roomId);
+    await vi.waitFor(() => expect(handA.value).not.toBeNull());
+    const match = matchOf(room);
+    expect(new Set([...match.players[0].hand, ...match.players[0].queue])).toEqual(new Set(deckA));
+    expect(new Set([...match.players[1].hand, ...match.players[1].queue])).toEqual(new Set(CARD_IDS.slice(0, 8)));
+    expect(new Set([...handA.value!.hand, handA.value!.next]).size).toBe(5);
+    for (const c of [...handA.value!.hand, handA.value!.next]) expect(deckA).toContain(c);
+
+    await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: RED, deck: ['pikachu'] })).rejects.toThrow(/eight different cards/);
+    await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: RED, deck: [...deckA.slice(0, 7), 'magikarp'] })).rejects.toThrow(/eight different cards/);
   });
 
   it('frees the seat if the waiting player leaves before the match starts', async () => {
@@ -192,6 +211,38 @@ describe('play', () => {
     expect(shots).toHaveLength(1);
     expect(shots[0]).toMatchObject({ team: 0, sourceDefId: 'bulbasaur', targetId: unit.id });
     expect(typeof shots[0]!.x).toBe('number');
+  });
+
+  it('syncs ability state: a digging Dugtrio is hidden until it surfaces', async () => {
+    const { a, room, handA } = await startMatch();
+    freezeInPlay(room);
+    const match = matchOf(room);
+    match.players[0].hand[0] = 'dugtrio';
+    match.players[0].elixir = 10;
+    const before = handA.value;
+    a.send(MSG.play, { slot: 0, x: 4, y: 8 });
+    await vi.waitFor(() => expect(handA.value).not.toBe(before));
+    const dug = [...room.state.entities.values()].find((e) => e.defId === 'dugtrio')!;
+    expect(dug.toJSON()).toMatchObject({ team: 0, hidden: true, deploying: true, stunned: false, slowed: false, charging: false });
+    for (let i = 0; i < 40; i++) room['tick'](0.05);
+    expect(room.state.entities.get(dug.id)!.hidden).toBe(false);
+  });
+
+  it('syncs evolution in place: same id, new species and health', async () => {
+    const { room } = await startMatch();
+    freezeInPlay(room);
+    const match = matchOf(room);
+    match.players[0].elixir = 10;
+    match.players[0].hand[0] = 'magikarp';
+    const played = playCard(match, 0, 0, { x: 9, y: 28 });
+    if (!played.ok) throw new Error(played.error);
+    const id = played.units[0]!.id;
+    room['syncState']();
+    expect(room.state.entities.get(id)!.defId).toBe('magikarp');
+    played.units[0]!.abilityTimer = 0.01;
+    played.units[0]!.deployTimer = 0;
+    room['tick'](0.05);
+    expect(room.state.entities.get(id)!.toJSON()).toMatchObject({ id, defId: 'gyarados', hp: 2200, maxHp: 2200 });
   });
 
   it('rejects plays without enough elixir', async () => {
