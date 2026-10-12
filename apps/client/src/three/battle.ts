@@ -1,16 +1,42 @@
 import * as THREE from 'three';
 import {
-  ARENA_W, CARDS, DEPLOY_MIN_Y, POCKET_MIN_Y, isValidDeploy, mirror, openPocketsFrom, statsOf,
-  type CardId, type Entity, type GameEvent, type Point, type Team,
+  ARENA_W, CARDS, DEPLOY_MIN_Y, POCKET_MIN_Y, RIVER_BOTTOM, RIVER_TOP, canDeployCard, mirror, openPocketsFrom, statsOf, unitName,
+  type CardId, type Entity, type GameEvent, type Point, type Team, type UnitId,
 } from '@cop/shared';
-import type { Session } from '../net.js';
+/** Minimal map view shared by Colyseus MapSchema and plain Maps. */
+export interface MapLike<V> {
+  forEach(fn: (value: V, key: string) => void): void;
+  values(): IterableIterator<V>;
+  has(key: string): boolean;
+}
+
+export interface EntityLike {
+  id: string; team: number; kind: string; defId: string; x: number; y: number; hp: number; maxHp: number;
+  deploying: boolean; active: boolean; hidden: boolean; stunned: boolean; slowed: boolean; charging: boolean;
+}
+
+export interface ProjectileLike {
+  id: string; team: number; sourceDefId: string; targetId: string; x: number; y: number;
+}
+
+/**
+ * Everything the 3D battle needs from a match: who we are, the mirrored state, server
+ * events and a change notification. The network Session implements it; so does the
+ * animation sandbox, which runs the simulation locally.
+ */
+export interface BattleSource {
+  readonly team: Team | undefined;
+  readonly state: { entities: MapLike<EntityLike>; projectiles: MapLike<ProjectileLike> };
+  on(event: 'fx', fn: (events: GameEvent[]) => void): () => void;
+  onStateChange(fn: () => void): () => void;
+}
 import { buildArena, type Arena } from './arena.js';
 import { toScene } from './coords.js';
 import { Fx } from './fx.js';
 import { INTERP_DELAY_MS } from './interp.js';
 import { teamColor } from './palette.js';
 import { buildRig } from './rigs/registry.js';
-import type { Rig } from './rigs/kit.js';
+import { restPose, type Rig } from './rigs/kit.js';
 import { Stage } from './stage.js';
 import { ProjectileView, TowerView, UNIT_VISUAL_SCALE, UnitView, type FrameCtx } from './views.js';
 
@@ -29,7 +55,7 @@ export interface BattleHooks {
   /** Called every frame with HP bar anchors in host pixels. */
   onBars(bars: BarInfo[]): void;
   /** Floating combat text ("It's super effective!") at host pixels. */
-  onText(text: string, x: number, y: number, tone: 'super' | 'weak'): void;
+  onText(text: string, x: number, y: number, tone: 'super' | 'weak' | 'special'): void;
 }
 
 interface Pending<T> {
@@ -61,7 +87,7 @@ export class BattleView {
   private readonly lastText = new Map<string, number>();
   private readonly unsubs: Array<() => void> = [];
 
-  constructor(host: HTMLElement, private readonly session: Session, private readonly hooks: BattleHooks) {
+  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks) {
     const team = session.team;
     if (team === undefined) throw new Error('BattleView created before the player has a team');
     this.team = team;
@@ -81,9 +107,7 @@ export class BattleView {
     this.stage.scene.add(this.ghostHolder);
 
     this.sync();
-    const onState = () => this.sync();
-    session.room.onStateChange(onState);
-    this.unsubs.push(() => session.room.onStateChange.remove(onState));
+    this.unsubs.push(session.onStateChange(() => this.sync()));
     this.unsubs.push(session.on('fx', (events) => {
       const at = performance.now() + INTERP_DELAY_MS;
       for (const ev of events) this.events.push({ at, value: ev });
@@ -109,14 +133,14 @@ export class BattleView {
     return world ? mirror(this.team, world) : null;
   }
 
-  canDeployAt(local: Point): boolean {
-    return isValidDeploy(local, openPocketsFrom(this.session.state.entities.values(), this.team));
+  canDeployAt(local: Point, card: CardId): boolean {
+    return canDeployCard(card, local, openPocketsFrom(this.session.state.entities.values(), this.team));
   }
 
-  /** Shade the area the player can't deploy into. */
-  showZone(show: boolean) {
-    this.zone.visible = show;
-    if (!show) return;
+  /** Shade the area the player can't deploy `card` into (diggers: only the river). */
+  showZone(card: CardId | null) {
+    this.zone.visible = card !== null;
+    if (!card) return;
     this.zone.clear();
     const pockets = openPocketsFrom(this.session.state.entities.values(), this.team);
     const mat = zoneMaterial();
@@ -132,6 +156,10 @@ export class BattleView {
       m.renderOrder = 6;
       this.zone.add(m);
     };
+    if (CARDS[card].stats.ability?.kind === 'dig') {
+      rect(0, RIVER_TOP, ARENA_W, RIVER_BOTTOM);
+      return;
+    }
     rect(0, 0, ARENA_W, POCKET_MIN_Y);
     if (!pockets.has('left')) rect(0, POCKET_MIN_Y, ARENA_W / 2, DEPLOY_MIN_Y);
     if (!pockets.has('right')) rect(ARENA_W / 2, POCKET_MIN_Y, ARENA_W, DEPLOY_MIN_Y);
@@ -161,7 +189,7 @@ export class BattleView {
     const s = toScene(mirror(this.team, local));
     this.ghostHolder.position.set(s.x, 0, s.z);
     this.ghostHolder.visible = true;
-    const valid = this.canDeployAt(local);
+    const valid = this.canDeployAt(local, card);
     const stats = CARDS[card].stats;
     this.ghostRing.scale.setScalar(stats.radius * 1.2 + (CARDS[card].count > 1 ? 0.7 : 0.25));
     (this.ghostRing.material as THREE.MeshBasicMaterial).color.set(valid ? 0xffffff : 0xff4a3d);
@@ -179,7 +207,8 @@ export class BattleView {
       if (e.kind === 'unit') {
         let v = this.units.get(id);
         if (!v) {
-          v = new UnitView(id, e.team as Team, e.defId as CardId, mine, e.deploying, e.hp, e.maxHp);
+          const king = [...this.towers.values()].find((t) => t.team === e.team && t.kind === 'king');
+          v = new UnitView(id, e.team as Team, e.defId as UnitId, mine, e.deploying, e.hp, e.maxHp, { digFrom: king?.position });
           this.units.set(id, v);
           this.stage.scene.add(v.holder);
           const s = toScene(e);
@@ -188,6 +217,7 @@ export class BattleView {
         v.buffer.push(now, e.x, e.y);
         v.hp = e.hp;
         v.maxHp = e.maxHp;
+        v.applyState(e);
       } else {
         let t = this.towers.get(id);
         if (!t) {
@@ -293,7 +323,8 @@ export class BattleView {
     }
     for (const v of this.towers.values()) v.update(ctx);
     for (const p of this.projectiles.values()) p.update(ctx);
-    for (const r of this.ghostRigs.values()) if (r.root.visible) r.animate({ t, speed: 0, walk: 0, attack: -1, hit: 0, land: 0, faint: -1, dormant: false }, dt);
+    this.updateBeams(ctx);
+    for (const r of this.ghostRigs.values()) if (r.root.visible) r.animate({ ...restPose(), t }, dt);
     this.fx.setViewport(this.stage.host.clientHeight, this.stage.camera.fov);
     this.fx.update(dt);
 
@@ -307,23 +338,27 @@ export class BattleView {
         const t = this.towers.get(ev.id);
         if (u) {
           u.attack(ev.targetId);
-          this.attackFx(u.rig.attackStyle, u.muzzleWorld(), ev.targetId, u.defId);
+          this.attackFx(u.rig.attackStyle, u.muzzleWorld(), ev.targetId, u.defId, u.id);
         }
         if (t) {
           t.attack(ev.targetId);
-          this.attackFx(t.occupant.attackStyle, t.muzzleWorld(), ev.targetId, t.defId);
+          this.attackFx(t.occupant.attackStyle, t.muzzleWorld(), ev.targetId, t.defId, t.id);
         }
         break;
       }
       case 'hit': {
-        const u = this.units.get(ev.targetId);
-        const t = this.towers.get(ev.targetId);
-        u?.hit();
-        t?.hit();
         const at = this.positionOf(ev.targetId);
+        if (ev.damage === 0) {
+          // Magikarp's Splash.
+          if (at) this.flavourText(ev.targetId, at, 'But nothing happened!', 'weak');
+          break;
+        }
+        this.units.get(ev.targetId)?.hit();
+        this.towers.get(ev.targetId)?.hit();
         if (at) {
           this.fx.sparks(at, ev.effectiveness === 'super' ? 0xffd93d : 0xffffff, ev.effectiveness === 'super' ? 14 : 7, 2.4);
-          if (ev.effectiveness === 'super' || ev.effectiveness === 'weak' || ev.effectiveness === 'immune') this.effectivenessText(ev.targetId, at, ev.effectiveness);
+          if (ev.status === 'stun') this.flavourText(ev.targetId, at, 'Paralyzed!', 'special');
+          else if (ev.effectiveness !== 'neutral') this.effectivenessText(ev.targetId, at, ev.effectiveness);
         }
         break;
       }
@@ -334,9 +369,43 @@ export class BattleView {
           this.fx.explosion(at, statsOf({ kind: 'unit', defId: u.defId }).splashRadius * 1.6);
           this.stage.shake(0.3);
           // Voltorb vanishes in its own blast instead of fainting.
-          this.units.delete(ev.id);
-          u.dispose();
+          this.takeUnit(ev.id)?.dispose();
         }
+        break;
+      }
+      case 'blast': {
+        // Geodude's Explosion: no faint, just a rock-shattering blast.
+        const s = toScene(ev);
+        const at = new THREE.Vector3(s.x, 0.6, s.z);
+        this.takeUnit(ev.id)?.dispose();
+        this.fx.explosion(at, ev.radius * 1.4);
+        this.fx.rubble(at, 0x9a8f80, 18, 0.9);
+        this.stage.shake(0.4);
+        break;
+      }
+      case 'heal': {
+        const s = toScene(ev);
+        const healer = this.units.get(ev.id);
+        healer?.pulse();
+        this.fx.ring(new THREE.Vector3(s.x, 0, s.z), 0xff9ec4, ev.radius, 0.7);
+        for (const id of ev.healed) {
+          const at = this.positionOf(id);
+          if (!at) continue;
+          for (let i = 0; i < 6; i++) this.fx.mote(at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, Math.random() * 0.4, (Math.random() - 0.5) * 0.8)), i % 2 ? 0x9cf07a : 0xffb3d1, 0.3, 0.8, new THREE.Vector3(0, 1.2, 0));
+        }
+        break;
+      }
+      case 'charge': {
+        const u = this.units.get(ev.id);
+        if (u) {
+          this.fx.dust(u.holder.position, 16, 0.8);
+          this.fx.ring(u.holder.position, 0xfff3d6, 1.8, 0.35);
+        }
+        break;
+      }
+      case 'evolve': {
+        const at = this.positionOf(ev.id);
+        if (at) this.flavourText(ev.id, at, `What? ${unitName(ev.from)} is evolving!`, 'special', true);
         break;
       }
       case 'spawn': {
@@ -348,7 +417,7 @@ export class BattleView {
   }
 
   /** Wind-up visuals that don't belong to a projectile: breath cones, slams, punches. */
-  private attackFx(style: Rig['attackStyle'], muzzle: THREE.Vector3, targetId: string, defId: string) {
+  private attackFx(style: Rig['attackStyle'], muzzle: THREE.Vector3, targetId: string, defId: string, attackerId: string) {
     const target = this.positionOf(targetId);
     switch (style) {
       case 'breath': {
@@ -377,10 +446,99 @@ export class BattleView {
         break;
       case 'punch':
       case 'bite':
-        if (target) this.fx.sparks(target, 0xffffff, 6, 2);
+      case 'kick':
+        if (target) this.fx.sparks(target, defId === 'gengar' ? 0xb88aff : 0xffffff, 6, 2);
+        if (defId === 'gengar' && target) this.fx.mote(target, 0x7a4ad8, 0.9, 0.3);
+        break;
+      case 'spin': {
+        // Fury Cutter: a white slash ring sweeping around the attacker.
+        const u = this.units.get(attackerId);
+        const at = u ? u.holder.position.clone() : muzzle.clone().setY(0);
+        this.fx.ring(at, 0xf4ffe8, 2.3, 0.3);
+        this.fx.sparks(at.clone().setY(0.8), 0xe8fff0, 10, 3);
+        break;
+      }
+      case 'splash':
+        this.fx.splash(muzzle);
+        break;
+      case 'beam':
+        this.feedBeam(attackerId, targetId);
         break;
       default:
         break;
+    }
+  }
+
+  /** Remove a unit wherever it is (alive or mid-faint) so a blast can replace its faint. */
+  private takeUnit(id: string): UnitView | undefined {
+    const u = this.units.get(id);
+    if (u) {
+      this.units.delete(id);
+      return u;
+    }
+    const i = this.fainting.findIndex((f) => f.id === id);
+    return i >= 0 ? this.fainting.splice(i, 1)[0] : undefined;
+  }
+
+  private flavourText(id: string, at: THREE.Vector3, text: string, tone: 'weak' | 'special', always = false) {
+    const now = performance.now();
+    const key = `${id}:${text}`;
+    if (!always && (this.lastText.get(key) ?? 0) > now - 2200) return;
+    this.lastText.set(key, now);
+    const p = this.stage.project(at.clone().add(new THREE.Vector3(0, 1.2, 0)));
+    if (p.visible) this.hooks.onText(text, p.x, p.y, tone);
+  }
+
+  // --- Fire Spin beams ---
+
+  private readonly beams = new Map<string, { group: THREE.Group; outer: THREE.Mesh; core: THREE.Mesh; targetId: string; hits: number; last: number; attacker: string }>();
+
+  private feedBeam(attackerId: string, targetId: string) {
+    const u = this.units.get(attackerId);
+    if (!u) return;
+    let b = this.beams.get(u.id);
+    if (!b) {
+      const geo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
+      geo.translate(0, 0.5, 0);
+      geo.rotateX(Math.PI / 2);
+      const outer = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      const core = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      const group = new THREE.Group();
+      group.add(outer, core);
+      this.stage.scene.add(group);
+      b = { group, outer, core, targetId, hits: 0, last: 0, attacker: u.id };
+      this.beams.set(u.id, b);
+    }
+    // Mirrors the server's ramp: consecutive hits on one target heat the stream up.
+    b.hits = b.targetId === targetId ? b.hits + 1 : 0;
+    b.targetId = targetId;
+    b.last = performance.now();
+  }
+
+  private updateBeams(ctx: FrameCtx) {
+    const now = performance.now();
+    for (const [id, b] of this.beams) {
+      const u = this.units.get(b.attacker);
+      const target = this.positionOf(b.targetId);
+      if (!u || !target || now - b.last > 550) {
+        b.group.removeFromParent();
+        b.outer.geometry.dispose();
+        (b.outer.material as THREE.Material).dispose();
+        (b.core.material as THREE.Material).dispose();
+        this.beams.delete(id);
+        continue;
+      }
+      const from = u.muzzleWorld();
+      const len = from.distanceTo(target);
+      const stage = Math.min(2, Math.floor(b.hits / 5));
+      const width = [0.08, 0.15, 0.26][stage]! * (1 + Math.sin(ctx.t * 40) * 0.15);
+      b.group.position.copy(from);
+      b.group.lookAt(target);
+      b.outer.scale.set(width * 1.8, width * 1.8, len);
+      b.core.scale.set(width * 0.7, width * 0.7, len);
+      (b.outer.material as THREE.MeshBasicMaterial).color.set([0xff7a1a, 0xff5a10, 0xff3a1a][stage]!);
+      if (Math.random() < 0.6) this.fx.mote(from.clone().lerp(target, Math.random()), 0xffb04a, 0.25 + stage * 0.12, 0.25);
+      if (Math.random() < 0.3 + stage * 0.2) this.fx.fireBurst(target, 0.25 + stage * 0.15);
     }
   }
 
@@ -403,7 +561,7 @@ export class BattleView {
     }
     for (const u of this.units.values()) {
       const p = this.stage.project(u.barAnchor(v));
-      out.push({ id: u.id, kind: 'unit', mine: u.mine, hp: u.hp, maxHp: u.maxHp, x: p.x, y: p.y, visible: p.visible && u.hp < u.maxHp });
+      out.push({ id: u.id, kind: 'unit', mine: u.mine, hp: u.hp, maxHp: u.maxHp, x: p.x, y: p.y, visible: p.visible && u.barVisible && u.hp < u.maxHp });
     }
     return out;
   }

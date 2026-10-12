@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CARDS, STARTERS, statsOf, type CardId, type Entity, type StarterId, type Team } from '@cop/shared';
+import { ARENA_W, BRIDGE_XS, CARDS, FORMS, STARTERS, statsOf, unitStats, type Ability, type Entity, type StarterId, type Team, type UnitId } from '@cop/shared';
 import { toScene, dampAngle } from './coords.js';
 import { SnapshotBuffer } from './interp.js';
 import type { Fx } from './fx.js';
@@ -26,15 +26,34 @@ export const UNIT_VISUAL_SCALE = 1.5;
 /** Where a unit should face by default: toward the opponent's side. */
 const homeYaw = (team: Team) => (team === 0 ? Math.PI : 0);
 
+/** Status flags mirrored from the server each patch. */
+export interface UnitStatus {
+  hidden: boolean;
+  stunned: boolean;
+  slowed: boolean;
+  charging: boolean;
+}
+
+export interface UnitOptions {
+  /** Scene point a digger tunnels from (its own king tower). */
+  digFrom?: THREE.Vector3;
+}
+
+const moundGeo = new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+const moundMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 1 });
+
 export class UnitView {
   readonly holder = new THREE.Group();
-  readonly rig: Rig;
+  rig: Rig;
+  defId: UnitId;
   readonly buffer = new SnapshotBuffer();
-  readonly flying: boolean;
-  readonly radius: number;
+  flying: boolean;
+  radius: number;
+  status: UnitStatus = { hidden: false, stunned: false, slowed: false, charging: false };
   private readonly pose: Pose = restPose();
   private readonly ring: THREE.Mesh;
   private readonly clock: THREE.Mesh;
+  private readonly ability: Ability | undefined;
   private yaw: number;
   private last: THREE.Vector3 | null = null;
   private dropT: number;
@@ -43,24 +62,32 @@ export class UnitView {
   private faintT = -1;
   private flashT = 0;
   private deployLeft: number;
-  private readonly strideLength: number;
+  private strideLength: number;
+  private opacity = 1;
+  private fxClock = 0;
+  /** Dig: the mound travels from the king to the drop point while the troop is underground. */
+  private dig: { from: THREE.Vector3; t: number; duration: number; mound: THREE.Mesh } | null = null;
+  private riseT = 1;
+  /** Evolution: glow up, swap the model, settle. */
+  private evolving: { into: UnitId; t: number; swapped: boolean } | null = null;
   hp: number;
   maxHp: number;
   /** True once the faint has fully played; the owner removes the view. */
   done = false;
 
-  constructor(readonly id: string, readonly team: Team, readonly defId: CardId, readonly mine: boolean, deploying: boolean, hp: number, maxHp: number) {
+  constructor(readonly id: string, readonly team: Team, defId: UnitId, readonly mine: boolean, deploying: boolean, hp: number, maxHp: number, opts: UnitOptions = {}) {
+    this.defId = defId;
     this.rig = buildRig(defId);
-    const stats = statsOf({ kind: 'unit', defId });
+    const stats = unitStats(defId);
+    this.ability = stats.ability;
     this.flying = stats.flying;
     this.radius = stats.radius;
     this.hp = hp;
     this.maxHp = maxHp;
     this.yaw = homeYaw(team);
-    // Stride scales with the drawn size so feet don't skate across the grass.
-    this.strideLength = (0.35 + this.rig.height * 0.22) * UNIT_VISUAL_SCALE;
-    this.dropT = deploying ? 0 : 1;
-    this.deployLeft = deploying ? 1 : 0;
+    this.strideLength = this.strideFor(this.rig);
+    this.deployLeft = deploying ? (this.ability?.kind === 'dig' ? this.ability.seconds : 1) : 0;
+    this.dropT = deploying && this.ability?.kind !== 'dig' ? 0 : 1;
 
     const color = teamColor(mine);
     this.ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
@@ -77,6 +104,20 @@ export class UnitView {
     this.clock.renderOrder = 4;
     this.rig.root.scale.setScalar(UNIT_VISUAL_SCALE);
     this.holder.add(this.ring, this.clock, this.rig.root);
+
+    if (deploying && this.ability?.kind === 'dig' && opts.digFrom) {
+      const mound = new THREE.Mesh(moundGeo, moundMat);
+      mound.scale.set(0.5, 0.28, 0.5);
+      mound.castShadow = true;
+      this.dig = { from: opts.digFrom.clone(), t: 0, duration: this.ability.seconds, mound };
+      this.rig.root.visible = false;
+      this.ring.visible = false;
+    }
+  }
+
+  private strideFor(rig: Rig) {
+    // Stride scales with the drawn size so feet don't skate across the grass.
+    return (0.35 + rig.height * 0.22) * UNIT_VISUAL_SCALE;
   }
 
   /** Scene position of the muzzle, for projectiles. */
@@ -86,6 +127,12 @@ export class UnitView {
 
   get alive() {
     return this.faintT < 0;
+  }
+
+  /** Server-side status and species, applied every patch. */
+  applyState(e: { defId: string; hidden: boolean; stunned: boolean; slowed: boolean; charging: boolean }) {
+    this.status = { hidden: e.hidden, stunned: e.stunned, slowed: e.slowed, charging: e.charging };
+    if (e.defId !== this.defId && !this.evolving) this.evolving = { into: e.defId as UnitId, t: 0, swapped: false };
   }
 
   attack(targetId: string) {
@@ -98,13 +145,20 @@ export class UnitView {
     this.flashT = 1;
   }
 
+  /** A special ability fired (heal pulse): drives the rig's `special` channel. */
+  pulse() {
+    this.pose.special = 1;
+  }
+
   faint() {
     if (this.faintT < 0) this.faintT = 0;
   }
 
   update(ctx: FrameCtx) {
     const { dt } = ctx;
-    this.pose.t += dt;
+    // Paralysis freezes the pose mid-motion; chill plays everything slower.
+    const tempo = this.status.stunned ? 0 : this.status.slowed ? 0.6 : 1;
+    this.pose.t += dt * tempo;
 
     // Position from the snapshot buffer.
     if (this.buffer.latest && this.faintT < 0) {
@@ -124,37 +178,30 @@ export class UnitView {
     }
     this.last = pos.clone();
     this.pose.speed += (speed - this.pose.speed) * Math.min(1, dt * 10);
+    this.pose.charging = this.status.charging;
 
     // Face the target while attacking.
     if (this.attackT >= 0 && this.attackTarget) {
       const tp = ctx.positionOf(this.attackTarget);
       if (tp) this.yaw = dampAngle(this.yaw, Math.atan2(tp.x - pos.x, tp.z - pos.z), 18, dt);
-      this.attackT += dt / this.rig.attackDuration;
+      this.attackT += (dt * tempo) / this.rig.attackDuration;
       if (this.attackT >= 1) this.attackT = -1;
     }
     this.pose.attack = this.attackT;
     this.rig.root.rotation.y = this.yaw;
 
-    // Deploy: drop from the sky, land with a squash and a puff of dust.
     let lift = this.rig.flyHeight;
-    if (this.dropT < 1) {
-      this.dropT = Math.min(1, this.dropT + dt / 0.32);
-      lift += (1 - this.dropT ** 2) * 4;
-      if (this.dropT >= 1) {
-        this.pose.land = 1;
-        ctx.fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 12, this.radius + 0.4);
-        ctx.fx.ring(new THREE.Vector3(pos.x, 0, pos.z), teamColor(this.mine), this.radius * 2 + 1, 0.4);
-      }
-    }
-    if (this.deployLeft > 0) {
-      this.deployLeft = Math.max(0, this.deployLeft - dt);
-      const segs = Math.ceil(36 * (1 - this.deployLeft));
-      (this.clock.geometry as THREE.BufferGeometry).setDrawRange(0, segs * 6);
-      this.clock.visible = this.deployLeft > 0;
-    }
+    this.updateDeploy(ctx, pos);
+    lift += this.updateLeap(ctx, pos);
+    if (this.dropT < 1) lift += (1 - this.dropT ** 2) * 4;
+    if (this.riseT < 1) lift -= (1 - this.riseT) * 1.2;
     this.rig.root.position.y = lift;
     this.pose.land = Math.max(0, this.pose.land - dt * 4);
     this.pose.hit = Math.max(0, this.pose.hit - dt * 5);
+    this.pose.special = Math.max(0, this.pose.special - dt * 1.4);
+
+    this.updateStatusFx(ctx, pos, lift);
+    this.updateEvolution(ctx, pos);
 
     // Faint.
     if (this.faintT >= 0) {
@@ -169,8 +216,130 @@ export class UnitView {
     }
 
     this.flashT = Math.max(0, this.flashT - dt * 9);
-    this.rig.flash(this.flashT * 0.8);
+    if (this.evolving && !this.evolving.swapped) this.rig.flash(Math.min(1, this.evolving.t / 0.9));
+    else if (this.flashT > 0) this.rig.flash(this.flashT * 0.8);
+    else if (this.status.slowed) this.rig.flash(0.35, 0x7fd8ff);
+    else this.rig.flash(0);
     this.rig.animate(this.pose, dt);
+  }
+
+  /** Drop-in for normal troops; tunnelling and surfacing for diggers. */
+  private updateDeploy(ctx: FrameCtx, pos: THREE.Vector3) {
+    const { dt, fx } = ctx;
+    if (this.dropT < 1) {
+      this.dropT = Math.min(1, this.dropT + dt / 0.32);
+      if (this.dropT >= 1) {
+        this.pose.land = 1;
+        fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 12, this.radius + 0.4);
+        fx.ring(new THREE.Vector3(pos.x, 0, pos.z), teamColor(this.mine), this.radius * 2 + 1, 0.4);
+      }
+    }
+    if (this.dig) {
+      const d = this.dig;
+      d.t += dt;
+      const k = Math.min(1, d.t / (d.duration - 0.25));
+      const at = d.from.clone().lerp(pos, k);
+      if (!d.mound.parent) this.holder.parent?.add(d.mound);
+      d.mound.position.set(at.x, 0, at.z);
+      d.mound.scale.set(0.5, 0.25 + Math.sin(d.t * 18) * 0.04, 0.5);
+      this.fxClock += dt;
+      if (this.fxClock > 0.05) {
+        this.fxClock = 0;
+        fx.dust(at, 2, 0.4, 0x8a6a42);
+      }
+      if (d.t >= d.duration) {
+        d.mound.removeFromParent();
+        this.dig = null;
+        this.rig.root.visible = true;
+        this.ring.visible = true;
+        this.riseT = 0;
+        this.pose.land = 1;
+        fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 22, 1, 0x8a6a42);
+        fx.ring(new THREE.Vector3(pos.x, 0, pos.z), teamColor(this.mine), 2.2, 0.4);
+      }
+    }
+    if (this.riseT < 1) this.riseT = Math.min(1, this.riseT + dt / 0.3);
+    if (this.deployLeft > 0) {
+      this.deployLeft = Math.max(0, this.deployLeft - dt);
+      const total = this.ability?.kind === 'dig' ? this.ability.seconds : 1;
+      const segs = Math.ceil(36 * (1 - this.deployLeft / total));
+      (this.clock.geometry as THREE.BufferGeometry).setDrawRange(0, segs * 6);
+      this.clock.visible = this.deployLeft > 0 && !this.dig;
+    }
+  }
+
+  /** River Leap: an arc over the water whenever a leaper is crossing away from a bridge. */
+  private updateLeap(ctx: FrameCtx, pos: THREE.Vector3): number {
+    if (this.ability?.kind !== 'riverLeap') return 0;
+    const onBridge = BRIDGE_XS.some((bx) => Math.abs(pos.x - (bx - ARENA_W / 2)) < 1.1);
+    const span = 2.2;
+    const k = onBridge ? 0 : Math.max(0, 1 - Math.abs(pos.z) / span);
+    const prev = this.pose.airborne;
+    this.pose.airborne = Math.sin(k * Math.PI / 2);
+    if (prev === 0 && k > 0) ctx.fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 10, 0.6);
+    if (prev > 0 && k === 0) {
+      this.pose.land = 1;
+      ctx.fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 14, 0.8);
+    }
+    return this.pose.airborne * 1.6;
+  }
+
+  /** Cloaking, paralysis crackle, frost and charge dust. */
+  private updateStatusFx(ctx: FrameCtx, pos: THREE.Vector3, lift: number) {
+    const { dt, fx } = ctx;
+    // Shadow: barely there for the opponent, a ghost of itself for its owner.
+    const targetOpacity = this.status.hidden && !this.dig ? (this.mine ? 0.35 : 0.06) : 1;
+    const eased = this.opacity + (targetOpacity - this.opacity) * Math.min(1, dt * 8);
+    // Snap the last step so a fully visible model goes back to opaque rendering.
+    const next = Math.abs(targetOpacity - eased) < 0.01 ? targetOpacity : eased;
+    if (next !== this.opacity) {
+      this.opacity = next;
+      if (this.faintT < 0) this.rig.fade(next);
+    }
+    if (!this.dig) this.ring.visible = !(this.status.hidden && !this.mine);
+
+    this.fxClock += dt;
+    if (this.fxClock < 0.08) return;
+    this.fxClock = 0;
+    const centre = new THREE.Vector3(pos.x, lift + this.rig.height * UNIT_VISUAL_SCALE * 0.5, pos.z);
+    if (this.status.stunned) {
+      fx.sparks(centre.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8)), 0xfff07a, 3, 1.5);
+      this.rig.root.position.x = (Math.random() - 0.5) * 0.06;
+    } else {
+      this.rig.root.position.x = 0;
+    }
+    if (this.status.slowed) fx.mote(centre.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.9, Math.random() * 0.6, (Math.random() - 0.5) * 0.9)), 0xd8f8ff, 0.18, 0.5, new THREE.Vector3(0, -0.4, 0));
+    if (this.status.charging && this.pose.speed > 0.5) fx.dust(new THREE.Vector3(pos.x, 0, pos.z), 2, 0.3);
+    if (this.status.hidden && !this.mine && !this.dig && Math.random() < 0.3) fx.mote(centre, 0x9a6ad8, 0.2, 0.4);
+  }
+
+  /** Magikarp → Gyarados: glow to a white silhouette, swap the model at the peak, flash and settle. */
+  private updateEvolution(ctx: FrameCtx, pos: THREE.Vector3) {
+    const ev = this.evolving;
+    if (!ev) return;
+    ev.t += ctx.dt;
+    this.pose.special = Math.min(1, ev.t / 0.9);
+    if (!ev.swapped && ev.t >= 0.9) {
+      ev.swapped = true;
+      this.rig.dispose();
+      this.rig.root.removeFromParent();
+      this.defId = ev.into;
+      this.rig = buildRig(ev.into);
+      this.rig.root.scale.setScalar(UNIT_VISUAL_SCALE);
+      this.holder.add(this.rig.root);
+      const stats = unitStats(ev.into);
+      this.flying = stats.flying;
+      this.radius = stats.radius;
+      this.ring.scale.setScalar(this.radius * 1.15 + 0.18);
+      this.strideLength = this.strideFor(this.rig);
+      this.flashT = 1;
+      this.pose.land = 1;
+      const at = new THREE.Vector3(pos.x, 1, pos.z);
+      ctx.fx.sparks(at, 0xffffff, 30, 4);
+      ctx.fx.ring(new THREE.Vector3(pos.x, 0, pos.z), 0xffffff, 3.2, 0.6);
+      ctx.fx.splash(at);
+    }
+    if (ev.t >= 1.4) this.evolving = null;
   }
 
   /** Top of the model in scene space, for the HP bar. */
@@ -178,8 +347,14 @@ export class UnitView {
     return out.set(this.holder.position.x, this.rig.root.position.y + this.rig.height * UNIT_VISUAL_SCALE + 0.2, this.holder.position.z);
   }
 
+  /** Whether the opponent should see this unit's HP bar. */
+  get barVisible(): boolean {
+    return !this.dig && !(this.status.hidden && !this.mine);
+  }
+
   dispose() {
     this.rig.dispose();
+    this.dig?.mound.removeFromParent();
     (this.ring.material as THREE.Material).dispose();
     (this.clock.material as THREE.Material).dispose();
     this.clock.geometry.dispose();
@@ -297,9 +472,9 @@ export class TowerView {
 export type MoveType = 'fire' | 'water' | 'electric' | 'grass' | 'ice' | 'normal' | 'other';
 
 export function moveTypeOf(defId: string): MoveType {
-  const kind = defId === 'trainer' ? 'king' : defId in CARDS ? 'unit' : defId in STARTERS ? 'princess' : null;
+  const kind = defId === 'trainer' ? 'king' : defId in CARDS || defId in FORMS ? 'unit' : defId in STARTERS ? 'princess' : null;
   if (!kind) return 'other';
-  const t = statsOf({ kind, defId: defId as CardId | StarterId | 'trainer' }).move.type;
+  const t = statsOf({ kind, defId: defId as UnitId | StarterId | 'trainer' }).move.type;
   const known: readonly string[] = ['fire', 'water', 'electric', 'grass', 'ice', 'normal'];
   return known.includes(t) ? (t as MoveType) : 'other';
 }

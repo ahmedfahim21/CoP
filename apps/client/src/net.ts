@@ -1,7 +1,7 @@
 import { Client, type Room } from '@colyseus/sdk';
 import {
   MSG, ROOM_NAME,
-  type ErrorMessage, type GameEvent, type HandMessage, type JoinOptions, type PlayMessage, type StarterPick, type Team,
+  type CardId, type ErrorMessage, type GameEvent, type HandMessage, type JoinOptions, type PlayMessage, type StarterPick, type Team,
 } from '@cop/shared';
 import { BattleState } from '@cop/shared/schema';
 import { SERVER_URL } from './config.js';
@@ -42,6 +42,11 @@ export class Session {
     return this.state.players?.get(this.room.sessionId)?.team as Team | undefined;
   }
 
+  onStateChange(fn: () => void): () => void {
+    this.room.onStateChange(fn);
+    return () => this.room.onStateChange.remove(fn);
+  }
+
   play(message: PlayMessage) {
     this.room.send(MSG.play, message);
   }
@@ -60,17 +65,24 @@ export class Session {
   }
 }
 
-export async function quickMatch(starters: StarterPick, name: string): Promise<Session> {
-  const room = await client.joinOrCreate(ROOM_NAME, { starters, name } satisfies JoinOptions, BattleState);
-  return new Session(room, starters, false);
+/** Everything a player brings to a battle. */
+export interface Loadout {
+  starters: StarterPick;
+  name: string;
+  deck: CardId[];
 }
 
-export async function createPrivate(starters: StarterPick, name: string): Promise<Session> {
-  const room = await client.create(ROOM_NAME, { starters, name, private: true } satisfies JoinOptions, BattleState);
-  return new Session(room, starters, true);
+export async function quickMatch(l: Loadout): Promise<Session> {
+  const room = await client.joinOrCreate(ROOM_NAME, { starters: l.starters, name: l.name, deck: l.deck } satisfies JoinOptions, BattleState);
+  return new Session(room, l.starters, false);
 }
 
-export async function joinByCode(code: string, starters: StarterPick, name: string): Promise<Session> {
-  const room = await client.joinById(code.trim(), { starters, name } satisfies JoinOptions, BattleState);
-  return new Session(room, starters, true);
+export async function createPrivate(l: Loadout): Promise<Session> {
+  const room = await client.create(ROOM_NAME, { starters: l.starters, name: l.name, deck: l.deck, private: true } satisfies JoinOptions, BattleState);
+  return new Session(room, l.starters, true);
+}
+
+export async function joinByCode(code: string, l: Loadout): Promise<Session> {
+  const room = await client.joinById(code.trim(), { starters: l.starters, name: l.name, deck: l.deck } satisfies JoinOptions, BattleState);
+  return new Session(room, l.starters, true);
 }

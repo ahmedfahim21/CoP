@@ -243,20 +243,21 @@ export class BattleHud {
   private select(i: number) {
     this.selected = i;
     this.cards.forEach((c, j) => c.classList.toggle('selected', j === i));
-    this.view.showZone(true);
+    this.view.showZone(this.hand?.hand[i] ?? null);
   }
 
   private deselect() {
     this.selected = null;
     this.cards.forEach((c) => c.classList.remove('selected', 'dragging'));
-    this.view.showZone(false);
+    this.view.showZone(null);
     this.view.setGhost(null, null);
   }
 
   private tryPlay(local: Point) {
     const slot = this.selected;
-    if (slot === null) return;
-    if (!this.view.canDeployAt(local)) {
+    const card = slot === null ? undefined : this.hand?.hand[slot];
+    if (slot === null || !card) return;
+    if (!this.view.canDeployAt(local, card)) {
       this.toast("Can't deploy there!");
       this.view.setGhost(null, null);
       return;
@@ -340,7 +341,7 @@ export class BattleHud {
     this.toastTimer = window.setTimeout(() => this.setStatus(null), 1300);
   }
 
-  private floatText(text: string, x: number, y: number, tone: 'super' | 'weak') {
+  private floatText(text: string, x: number, y: number, tone: 'super' | 'weak' | 'special') {
     const el = h('div', { class: `float-text ${tone}`, textContent: text });
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
