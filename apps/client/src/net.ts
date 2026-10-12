@@ -60,17 +60,17 @@ export class Session {
   }
 }
 
-export async function quickMatch(starters: StarterPick): Promise<Session> {
-  const room = await client.joinOrCreate(ROOM_NAME, { starters } satisfies JoinOptions, BattleState);
+export async function quickMatch(starters: StarterPick, name: string): Promise<Session> {
+  const room = await client.joinOrCreate(ROOM_NAME, { starters, name } satisfies JoinOptions, BattleState);
   return new Session(room, starters, false);
 }
 
-export async function createPrivate(starters: StarterPick): Promise<Session> {
-  const room = await client.create(ROOM_NAME, { starters, private: true } satisfies JoinOptions, BattleState);
+export async function createPrivate(starters: StarterPick, name: string): Promise<Session> {
+  const room = await client.create(ROOM_NAME, { starters, name, private: true } satisfies JoinOptions, BattleState);
   return new Session(room, starters, true);
 }
 
-export async function joinByCode(code: string, starters: StarterPick): Promise<Session> {
-  const room = await client.joinById(code.trim(), { starters } satisfies JoinOptions, BattleState);
+export async function joinByCode(code: string, starters: StarterPick, name: string): Promise<Session> {
+  const room = await client.joinById(code.trim(), { starters, name } satisfies JoinOptions, BattleState);
   return new Session(room, starters, true);
 }
