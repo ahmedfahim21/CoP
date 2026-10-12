@@ -3,7 +3,7 @@ import {
   DEFAULT_DECK, MSG, createMatch, forfeit, isCharging, isDeck, isDoubleElixir, isStarterPick, playCard, sanitizeTrainerName, step,
   type CardId, type ErrorMessage, type HandMessage, type JoinOptions, type MatchState, type PlayMessage, type StarterPick, type Team,
 } from '@cop/shared';
-import { BattleState, EntityState, PlayerInfo, ProjectileState } from '@cop/shared/schema';
+import { BattleState, EntityState, PlayerInfo, ProjectileState, ZoneState } from '@cop/shared/schema';
 
 const TICK_MS = 50;
 /** Guards against a huge catch-up step after an event-loop stall. */
@@ -167,11 +167,14 @@ export class BattleRoom extends Room<{ state: BattleState }> {
         existing.stunned = e.stun > 0;
         existing.slowed = e.slow > 0;
         existing.charging = isCharging(e);
+        existing.shield = Math.ceil(e.shield);
+        existing.enraged = e.enraged;
       } else {
         s.entities.set(e.id, new EntityState({
           id: e.id, team: e.team, kind: e.kind, defId: e.defId, x: e.x, y: e.y,
           hp: Math.ceil(e.hp), maxHp: e.maxHp, deploying: e.deployTimer > 0, active: e.active,
           hidden: e.hidden, stunned: e.stun > 0, slowed: e.slow > 0, charging: isCharging(e),
+          shield: Math.ceil(e.shield), enraged: e.enraged,
         }));
       }
     }
@@ -189,6 +192,15 @@ export class BattleRoom extends Room<{ state: BattleState }> {
       }
     }
     for (const id of [...s.projectiles.keys()]) if (!flying.has(id)) s.projectiles.delete(id);
+
+    const clouds = new Set<string>();
+    for (const z of match.zones) {
+      clouds.add(z.id);
+      const existing = s.zones.get(z.id);
+      if (existing) existing.timeLeft = z.timeLeft;
+      else s.zones.set(z.id, new ZoneState({ id: z.id, team: z.team, x: z.x, y: z.y, radius: z.radius, timeLeft: z.timeLeft }));
+    }
+    for (const id of [...s.zones.keys()]) if (!clouds.has(id)) s.zones.delete(id);
   }
 }
 

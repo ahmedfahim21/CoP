@@ -21,6 +21,9 @@ export const EntityState = schema({
   slowed: t.boolean(),
   /** Take Down primed. */
   charging: t.boolean(),
+  /** Barrier points left. */
+  shield: t.int16(),
+  enraged: t.boolean(),
 }, 'EntityState');
 export type EntityState = SchemaType<typeof EntityState>;
 
@@ -33,6 +36,17 @@ export const ProjectileState = schema({
   y: t.float32(),
 }, 'ProjectileState');
 export type ProjectileState = SchemaType<typeof ProjectileState>;
+
+/** A lingering damage cloud. */
+export const ZoneState = schema({
+  id: t.string(),
+  team: t.uint8(),
+  x: t.float32(),
+  y: t.float32(),
+  radius: t.float32(),
+  timeLeft: t.float32(),
+}, 'ZoneState');
+export type ZoneState = SchemaType<typeof ZoneState>;
 
 export const PlayerInfo = schema({
   sessionId: t.string(),
@@ -53,6 +67,7 @@ export const BattleState = schema({
   doubleElixir: t.boolean(),
   entities: t.map(EntityState),
   projectiles: t.map(ProjectileState),
+  zones: t.map(ZoneState),
   /** Keyed by sessionId. */
   players: t.map(PlayerInfo),
   /** -1 while playing or on a draw; see resultReason. */

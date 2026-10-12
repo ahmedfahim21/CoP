@@ -28,7 +28,21 @@ export type Ability =
   /** Explodes when it faints (Giant Skeleton). */
   | { kind: 'deathBlast'; damage: number; radius: number; type: PokeType }
   /** Becomes another Pokémon if it survives `after` seconds on the field (Card Evolutions). */
-  | { kind: 'evolve'; after: number; into: FormId };
+  | { kind: 'evolve'; after: number; into: FormId }
+  /** A placed structure: never moves, decays over `lifetime`, lures tower-only troops (Tesla). */
+  | { kind: 'building'; lifetime: number }
+  /** Shots travel a straight line, hitting everything along it once; optional knockback (Bowler, Magic Archer). */
+  | { kind: 'line'; length: number; width: number; knockback: number }
+  /** Leaps onto ground targets between min and max range and slams on landing (Mega Knight). */
+  | { kind: 'jump'; minRange: number; maxRange: number; seconds: number; cooldown: number; damageMult: number; radius: number; knockback: number; deploySlam: boolean }
+  /** Below `below` of its health it moves and attacks faster (Rage). */
+  | { kind: 'rage'; below: number; speedMult: number; hitSpeedMult: number }
+  /** Leaves a damaging cloud where it faints (Poison). */
+  | { kind: 'deathCloud'; radius: number; dps: number; seconds: number; type: PokeType }
+  /** A shield that soaks damage before health (Dark Prince). */
+  | { kind: 'shield'; hp: number }
+  /** Each hit arcs on to more nearby enemies, briefly stunning all (Electro Dragon). */
+  | { kind: 'chain'; jumps: number; range: number; stun: number };
 
 /** Distances in tiles, times in seconds, speeds in tiles/second. */
 export interface CombatStats {
@@ -70,6 +84,7 @@ export interface CardDef {
 export const CARD_IDS = [
   'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'lapras', 'charizard', 'snorlax',
   'magikarp', 'geodude', 'dugtrio', 'gengar', 'chansey', 'scyther', 'jolteon', 'rapidash', 'tauros', 'articuno', 'moltres',
+  'primeape', 'mrmime', 'magneton', 'starmie', 'koffing', 'golem', 'hitmonlee', 'zapdos',
 ] as const;
 export type CardId = (typeof CARD_IDS)[number];
 
@@ -167,6 +182,46 @@ export const CARDS: Record<CardId, CardDef> = {
     id: 'moltres', name: 'Moltres', dex: 146, cost: 5, count: 1, rarity: 'legendary',
     special: { name: 'Fire Spin', text: 'A flame stream that gets hotter the longer it burns one target.' },
     stats: { ...MELEE, hp: 1150, damage: 30, hitSpeed: 0.4, range: 3.5, sightRange: 5.5, speed: 1, radius: 0.6, flying: true, targets: 'air-ground', types: ['fire', 'flying'], move: { name: 'Fire Spin', type: 'fire' }, ability: { kind: 'ramp', hitsPerStage: 5, multipliers: [1, 3, 8] } },
+  },
+  primeape: {
+    id: 'primeape', name: 'Primeape', dex: 57, cost: 3, count: 1, rarity: 'common',
+    special: { name: 'Rage', text: 'Below half health it flies into a rage: faster feet, faster fists.' },
+    stats: { ...MELEE, hp: 1000, damage: 140, hitSpeed: 1.1, range: 0.6, speed: 1.5, radius: 0.45, flying: false, targets: 'ground', types: ['fighting'], move: { name: 'Low Kick', type: 'fighting' }, ability: { kind: 'rage', below: 0.5, speedMult: 1.4, hitSpeedMult: 0.6 } },
+  },
+  mrmime: {
+    id: 'mrmime', name: 'Mr. Mime', dex: 122, cost: 3, count: 1, rarity: 'rare',
+    special: { name: 'Barrier', text: 'Mimes up an invisible wall that soaks hits before its own health.' },
+    stats: { ...MELEE, hp: 700, damage: 110, hitSpeed: 1.3, range: 4.5, sightRange: 5.5, speed: 1, radius: 0.45, flying: false, targets: 'air-ground', types: ['psychic', 'fairy'], move: { name: 'Psybeam', type: 'psychic' }, projectileSpeed: 10, ability: { kind: 'shield', hp: 450 } },
+  },
+  magneton: {
+    id: 'magneton', name: 'Magneton', dex: 82, cost: 4, count: 1, rarity: 'rare',
+    special: { name: 'Magnet Turret', text: 'Hovers in place like a Tesla, zapping air and ground. Lures tower-only troops; fades after 30 seconds.' },
+    stats: { ...MELEE, hp: 1100, damage: 120, hitSpeed: 1.1, range: 5.5, sightRange: 5.5, speed: 0, radius: 0.7, flying: false, targets: 'air-ground', types: ['electric', 'steel'], move: { name: 'Thunder Shock', type: 'electric' }, ability: { kind: 'building', lifetime: 30 } },
+  },
+  starmie: {
+    id: 'starmie', name: 'Starmie', dex: 121, cost: 4, count: 1, rarity: 'rare',
+    special: { name: 'Swift', text: 'Its stars fly straight on, piercing every enemy in the line.' },
+    stats: { ...MELEE, hp: 750, damage: 130, hitSpeed: 1.3, range: 6, sightRange: 6.5, speed: 1, radius: 0.45, flying: false, targets: 'air-ground', types: ['water', 'psychic'], move: { name: 'Swift', type: 'normal' }, projectileSpeed: 11, ability: { kind: 'line', length: 8, width: 0.45, knockback: 0 } },
+  },
+  koffing: {
+    id: 'koffing', name: 'Koffing', dex: 109, cost: 5, count: 1, rarity: 'epic',
+    special: { name: 'Poison Gas', text: 'Floats over to towers and drops Sludge. When it faints it leaves a lingering poison cloud.' },
+    stats: { ...MELEE, hp: 1000, damage: 300, hitSpeed: 2, range: 0.5, speed: 1, radius: 0.5, flying: true, targets: 'buildings', types: ['poison'], move: { name: 'Sludge', type: 'poison' }, ability: { kind: 'deathCloud', radius: 2.5, dps: 70, seconds: 4, type: 'poison' } },
+  },
+  golem: {
+    id: 'golem', name: 'Golem', dex: 76, cost: 5, count: 1, rarity: 'epic',
+    special: { name: 'Rollout', text: 'Rolls a boulder that ploughs through every ground enemy in its path and knocks them back.' },
+    stats: { ...MELEE, hp: 1700, damage: 240, hitSpeed: 2.5, range: 4, sightRange: 5, speed: 0.75, radius: 0.75, flying: false, targets: 'ground', types: ['rock', 'ground'], move: { name: 'Rollout', type: 'rock' }, projectileSpeed: 5, ability: { kind: 'line', length: 7, width: 0.55, knockback: 1.4 } },
+  },
+  hitmonlee: {
+    id: 'hitmonlee', name: 'Hitmonlee', dex: 106, cost: 6, count: 1, rarity: 'epic',
+    special: { name: 'Jump Kick', text: 'Lands with a slam when deployed, and leaps onto enemies a few tiles away for double damage.' },
+    stats: { ...MELEE, hp: 2200, damage: 200, hitSpeed: 1.7, range: 0.8, speed: 1, radius: 0.6, flying: false, targets: 'ground', types: ['fighting'], move: { name: 'Double Kick', type: 'fighting' }, splashRadius: 1.3, ability: { kind: 'jump', minRange: 3, maxRange: 5.5, seconds: 0.8, cooldown: 3, damageMult: 2, radius: 1.8, knockback: 1.2, deploySlam: true } },
+  },
+  zapdos: {
+    id: 'zapdos', name: 'Zapdos', dex: 145, cost: 5, count: 1, rarity: 'legendary',
+    special: { name: 'Chain Lightning', text: 'Thunder arcs from its target to two more enemies, stunning each for a moment.' },
+    stats: { ...MELEE, hp: 1050, damage: 150, hitSpeed: 2, range: 4, sightRange: 5.5, speed: 1, radius: 0.6, flying: true, targets: 'air-ground', types: ['electric', 'flying'], move: { name: 'Thunder', type: 'electric' }, ability: { kind: 'chain', jumps: 2, range: 4, stun: 0.4 } },
   },
 };
 

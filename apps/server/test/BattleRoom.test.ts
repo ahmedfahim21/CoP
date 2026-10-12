@@ -245,6 +245,30 @@ describe('play', () => {
     expect(room.state.entities.get(id)!.toJSON()).toMatchObject({ id, defId: 'gyarados', hp: 2200, maxHp: 2200 });
   });
 
+  it('syncs Barrier and poison clouds', async () => {
+    const { room } = await startMatch();
+    freezeInPlay(room);
+    const match = matchOf(room);
+    match.players[0].elixir = 10;
+    match.players[0].hand[0] = 'mrmime';
+    const mime = playCard(match, 0, 0, { x: 9, y: 28 });
+    if (!mime.ok) throw new Error(mime.error);
+    match.players[0].elixir = 10;
+    match.players[0].hand[0] = 'koffing';
+    const koffing = playCard(match, 0, 0, { x: 5, y: 28 });
+    if (!koffing.ok) throw new Error(koffing.error);
+    room['syncState']();
+    expect(room.state.entities.get(mime.units[0]!.id)!.shield).toBe(450);
+    koffing.units[0]!.hp = 0;
+    room['tick'](0.05);
+    const zones = [...room.state.zones.values()].map((z) => z.toJSON());
+    expect(zones).toHaveLength(1);
+    expect(zones[0]).toMatchObject({ team: 0, radius: 2.5 });
+    expect(zones[0]!.x).toBeCloseTo(koffing.units[0]!.x, 3);
+    for (let i = 0; i < 90; i++) room['tick'](0.05);
+    expect(room.state.zones.size).toBe(0);
+  });
+
   it('rejects plays without enough elixir', async () => {
     const { a, room } = await startMatch();
     freezeInPlay(room);

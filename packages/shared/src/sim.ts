@@ -52,6 +52,13 @@ export interface Entity {
   rampHits: number;
   /** Countdown shared by timed abilities: heal cadence, shadow reveal, evolution. */
   abilityTimer: number;
+  /** Barrier: damage soaked before health. */
+  shield: number;
+  /** Rage is on. */
+  enraged: boolean;
+  /** Jump Kick in flight, and the wait until the next one. */
+  jump: { fromX: number; fromY: number; toX: number; toY: number; t: number; seconds: number } | null;
+  jumpCooldown: number;
 }
 
 export interface Projectile {
@@ -64,7 +71,25 @@ export interface Projectile {
   /** Last known target position; used if the target dies mid-flight. */
   tx: number;
   ty: number;
+  /** Line shots (Rollout, Swift) fly straight and hit everything they pass once. */
+  line: { dx: number; dy: number; travel: number; hit: string[] } | null;
 }
+
+/** A lingering damage area (Poison Gas). */
+export interface Zone {
+  id: string;
+  team: Team;
+  x: number;
+  y: number;
+  radius: number;
+  dps: number;
+  type: PokeType;
+  timeLeft: number;
+  /** Seconds to the next damage pulse. */
+  tick: number;
+}
+
+export const ZONE_TICK = 0.5;
 
 export interface PlayerState {
   elixir: number;
@@ -92,7 +117,21 @@ export type GameEvent =
   /** A troop evolved into another Pokémon in place. */
   | { type: 'evolve'; id: string; from: UnitId; into: UnitId; x: number; y: number }
   /** Death explosion (Explosion). */
-  | { type: 'blast'; id: string; team: Team; x: number; y: number; radius: number };
+  | { type: 'blast'; id: string; team: Team; x: number; y: number; radius: number }
+  /** Jump Kick takes off: the troop arcs from (x, y) to (tx, ty) over `seconds`. */
+  | { type: 'jump'; id: string; x: number; y: number; tx: number; ty: number; seconds: number }
+  /** A landing slam (Jump Kick or deploy). */
+  | { type: 'slam'; id: string; x: number; y: number; radius: number }
+  /** Rage kicked in. */
+  | { type: 'rage'; id: string }
+  /** Barrier broke. */
+  | { type: 'shieldBreak'; id: string }
+  /** Chain Lightning: the bolt's path, attacker first. */
+  | { type: 'chain'; id: string; path: string[] }
+  /** A poison cloud appeared. */
+  | { type: 'cloud'; id: string; team: Team; x: number; y: number; radius: number; seconds: number }
+  /** A troop was knocked back. */
+  | { type: 'knock'; id: string };
 
 export interface MatchState {
   phase: Phase;
@@ -102,6 +141,7 @@ export interface MatchState {
   rngState: number;
   entities: Entity[];
   projectiles: Projectile[];
+  zones: Zone[];
   players: [PlayerState, PlayerState];
   result: MatchResult | null;
   /** Events produced by the most recent step/playCard; cleared at the start of each step. */
@@ -158,6 +198,7 @@ function addEntity(state: MatchState, seed: EntitySeed): Entity {
     ...seed, id: newId(state), hp: stats.hp, maxHp: stats.hp, cooldown: stats.hitSpeed * 0.5, targetId: null,
     hidden: a?.kind === 'dig', stun: 0, slow: 0, slowFactor: 1, charge: 0, rampTarget: null, rampHits: 0,
     abilityTimer: a?.kind === 'heal' ? a.every : a?.kind === 'evolve' ? a.after : 0,
+    shield: a?.kind === 'shield' ? a.hp : 0, enraged: false, jump: null, jumpCooldown: 0,
   };
   state.entities.push(e);
   return e;
@@ -171,6 +212,7 @@ export function createMatch(starters: [StarterPick, StarterPick], seed: number, 
     rngState: seed | 0,
     entities: [],
     projectiles: [],
+    zones: [],
     players: [emptyPlayer(starters[0]), emptyPlayer(starters[1])],
     result: null,
     events: [],
@@ -289,7 +331,7 @@ export function step(state: MatchState, dt: number): void {
     if (e.hp <= 0) continue;
     if (e.deployTimer > 0) {
       e.deployTimer = Math.max(0, e.deployTimer - dt);
-      if (e.deployTimer === 0) onDeployed(e);
+      if (e.deployTimer === 0) onDeployed(state, e);
       continue;
     }
     e.slow = Math.max(0, e.slow - dt);
@@ -300,16 +342,20 @@ export function step(state: MatchState, dt: number): void {
       e.charge = 0;
       continue;
     }
+    const rage = abilityOf(e, 'rage');
     const tempo = dt * e.slowFactor;
-    e.cooldown = Math.max(0, e.cooldown - tempo);
+    // Rage speeds up the attack timer as well as the legs.
+    e.cooldown = Math.max(0, e.cooldown - tempo / (rage && e.enraged ? rage.hitSpeedMult : 1));
     if (e.kind === 'unit') {
       tickAbility(state, e, dt);
-      if (e.hp > 0) updateUnit(state, e, byId, tempo);
+      if (e.hp > 0 && e.jump) flyJump(state, e, dt);
+      else if (e.hp > 0) updateUnit(state, e, byId, tempo);
     } else {
       updateTower(state, e, byId);
     }
   }
   updateProjectiles(state, byId, dt);
+  updateZones(state, dt);
   separate(state);
   resolveDeaths(state);
 
@@ -323,10 +369,17 @@ export function isDoubleElixir(state: MatchState): boolean {
   return state.phase === 'overtime' || (state.phase === 'regular' && state.timeLeft <= DOUBLE_ELIXIR_AT);
 }
 
-function onDeployed(e: Entity) {
+function onDeployed(state: MatchState, e: Entity) {
   if (abilityOf(e, 'dig')) e.hidden = false;
   // A ghost arrives already cloaked.
   if (abilityOf(e, 'shadow')) e.hidden = true;
+  const jump = abilityOf(e, 'jump');
+  if (jump?.deploySlam) slam(state, e, 1, jump.radius, jump.knockback);
+}
+
+/** Structures: towers, plus troops that are buildings (they lure tower-only troops). */
+export function isStructure(e: Pick<Entity, 'kind' | 'defId'>): boolean {
+  return e.kind !== 'unit' || abilityOf(e, 'building') !== null;
 }
 
 /** Per-step upkeep for abilities that run on their own clock. */
@@ -356,6 +409,50 @@ function tickAbility(state: MatchState, e: Entity, dt: number) {
     e.abilityTimer -= dt;
     if (e.abilityTimer <= 0) evolveInto(state, e, evolve.into);
   }
+  const building = abilityOf(e, 'building');
+  // Buildings wear down on their own, like every Clash Royale building.
+  if (building) e.hp -= (e.maxHp / building.lifetime) * dt;
+  const rage = abilityOf(e, 'rage');
+  if (rage && !e.enraged && e.hp < e.maxHp * rage.below) {
+    e.enraged = true;
+    state.events.push({ type: 'rage', id: e.id });
+  }
+  if (abilityOf(e, 'jump')) e.jumpCooldown = Math.max(0, e.jumpCooldown - dt);
+}
+
+/** Moves a Jump Kick along its arc and lands it. */
+function flyJump(state: MatchState, e: Entity, dt: number) {
+  const j = e.jump!;
+  j.t = Math.min(j.seconds, j.t + dt);
+  const k = j.t / j.seconds;
+  e.x = j.fromX + (j.toX - j.fromX) * k;
+  e.y = j.fromY + (j.toY - j.fromY) * k;
+  if (j.t < j.seconds) return;
+  e.jump = null;
+  const jump = abilityOf(e, 'jump')!;
+  e.jumpCooldown = jump.cooldown;
+  e.cooldown = statsOf(e).hitSpeed * 0.5;
+  slam(state, e, jump.damageMult, jump.radius, jump.knockback);
+}
+
+/** Area hit centred on `e`, with knockback away from it. */
+function slam(state: MatchState, e: Entity, mult: number, radius: number, knockback: number) {
+  state.events.push({ type: 'slam', id: e.id, x: e.x, y: e.y, radius });
+  const inBlast = state.entities.filter((v) => v.team !== e.team && v.hp > 0 && dist(v, e) - statsOf(v).radius <= radius);
+  applyDamage(state, e, null, e, mult, radius);
+  for (const v of inBlast) {
+    const d = Math.max(0.01, dist(v, e));
+    knock(state, v, (v.x - e.x) / d, (v.y - e.y) / d, knockback);
+  }
+}
+
+/** Shove a ground troop along a direction. Structures and fliers don't budge. */
+function knock(state: MatchState, v: Entity, dx: number, dy: number, distance: number) {
+  if (distance <= 0 || isStructure(v) || statsOf(v).flying || v.hp <= 0) return;
+  v.x += dx * distance;
+  v.y += dy * distance;
+  v.charge = 0;
+  state.events.push({ type: 'knock', id: v.id });
 }
 
 function evolveInto(state: MatchState, e: Entity, into: FormId) {
@@ -374,7 +471,7 @@ function evolveInto(state: MatchState, e: Entity, into: FormId) {
 export function canTarget(attacker: Entity, target: Entity): boolean {
   if (target.team === attacker.team || target.hp <= 0 || target.hidden) return false;
   const s = statsOf(attacker).targets;
-  if (s === 'buildings') return target.kind !== 'unit';
+  if (s === 'buildings') return isStructure(target);
   if (s === 'ground') return !statsOf(target).flying;
   return true;
 }
@@ -419,10 +516,10 @@ function updateUnit(state: MatchState, unit: Entity, byId: Map<string, Entity>, 
   if (!target || !canTarget(unit, target) || (!inRange(unit, target) && target.kind === 'unit' && gap(unit, target) > stats.sightRange)) {
     target =
       nearest(state, unit, (e) => canTarget(unit, e) && gap(unit, e) <= stats.sightRange) ??
-      nearest(state, unit, (e) => canTarget(unit, e) && e.kind !== 'unit') ??
+      nearest(state, unit, (e) => canTarget(unit, e) && isStructure(e)) ??
       undefined;
     unit.targetId = target?.id ?? null;
-  } else if (target.kind !== 'unit' && !inRange(unit, target)) {
+  } else if (isStructure(target) && !inRange(unit, target)) {
     // Walking to a tower: divert to any enemy that comes into sight.
     const diversion = nearest(state, unit, (e) => e.kind === 'unit' && canTarget(unit, e) && gap(unit, e) <= stats.sightRange);
     if (diversion) {
@@ -432,13 +529,29 @@ function updateUnit(state: MatchState, unit: Entity, byId: Map<string, Entity>, 
   }
   if (!target) return;
 
+  const jump = abilityOf(unit, 'jump');
+  if (jump && unit.jumpCooldown <= 0 && !statsOf(target).flying) {
+    const g = gap(unit, target);
+    if (g >= jump.minRange && g <= jump.maxRange) {
+      // Land just short of the target, touching it.
+      const d = dist(unit, target);
+      const stop = (stats.radius + statsOf(target).radius) / d;
+      const toX = target.x + (unit.x - target.x) * stop;
+      const toY = target.y + (unit.y - target.y) * stop;
+      unit.jump = { fromX: unit.x, fromY: unit.y, toX, toY, t: 0, seconds: jump.seconds };
+      state.events.push({ type: 'jump', id: unit.id, x: unit.x, y: unit.y, tx: toX, ty: toY, seconds: jump.seconds });
+      return;
+    }
+  }
+
   if (inRange(unit, target)) {
     if (unit.cooldown <= 0) attack(state, unit, target);
     return;
   }
   const charge = abilityOf(unit, 'charge');
+  const rage = abilityOf(unit, 'rage');
   const wasCharging = isCharging(unit);
-  const speed = stats.speed * (wasCharging && charge ? charge.speedMult : 1);
+  const speed = stats.speed * (wasCharging && charge ? charge.speedMult : 1) * (rage && unit.enraged ? rage.speedMult : 1);
   const moved = moveToward(unit, nextWaypoint(unit, target), speed * dt);
   if (charge) {
     unit.charge += moved;
@@ -508,11 +621,39 @@ function attack(state: MatchState, attacker: Entity, target: Entity): void {
     applyDamage(state, attacker, target, attacker, mult, stats.splashRadius + stats.radius);
     return;
   }
+  const line = abilityOf(attacker, 'line');
+  if (line) {
+    const d = Math.max(0.01, dist(attacker, target));
+    state.projectiles.push({
+      id: newId(state), team: attacker.team, sourceDefId: attacker.defId, x: attacker.x, y: attacker.y,
+      targetId: '', tx: target.x, ty: target.y,
+      line: { dx: (target.x - attacker.x) / d, dy: (target.y - attacker.y) / d, travel: line.length, hit: [] },
+    });
+    return;
+  }
   if (stats.projectileSpeed > 0) {
     state.projectiles.push({
       id: newId(state), team: attacker.team, sourceDefId: attacker.defId,
-      x: attacker.x, y: attacker.y, targetId: target.id, tx: target.x, ty: target.y,
+      x: attacker.x, y: attacker.y, targetId: target.id, tx: target.x, ty: target.y, line: null,
     });
+    return;
+  }
+  const chain = abilityOf(attacker, 'chain');
+  if (chain) {
+    // Chain Lightning: target first, then up to `jumps` fresh enemies near the last one.
+    const path = [target];
+    while (path.length <= chain.jumps) {
+      const last = path[path.length - 1]!;
+      const next = nearest(state, last, (e) => canTarget(attacker, e) && !path.includes(e) && dist(e, last) <= chain.range);
+      if (!next) break;
+      path.push(next);
+    }
+    for (const v of path) {
+      applyDamage(state, attacker, v, v, mult);
+      v.stun = Math.max(v.stun, chain.stun);
+      v.charge = 0;
+    }
+    state.events.push({ type: 'chain', id: attacker.id, path: [attacker.id, ...path.map((v) => v.id)] });
     return;
   }
   applyDamage(state, attacker, target, target, mult);
@@ -541,7 +682,15 @@ function applyDamage(state: MatchState, source: Pick<Entity, 'team' | 'kind' | '
 }
 
 function hurt(state: MatchState, v: Entity, damage: number, moveType: PokeType, status?: 'stun' | 'slow') {
-  v.hp -= damage;
+  if (v.shield > 0 && damage > 0) {
+    // Barrier soaks the hit first; overflow carries on to health.
+    const soaked = Math.min(v.shield, damage);
+    v.shield -= soaked;
+    v.hp -= damage - soaked;
+    if (v.shield === 0) state.events.push({ type: 'shieldBreak', id: v.id });
+  } else {
+    v.hp -= damage;
+  }
   if (v.kind === 'king' && damage > 0) v.active = true;
   state.events.push({ type: 'hit', targetId: v.id, x: v.x, y: v.y, damage, effectiveness: effectivenessLabel(moveType, statsOf(v).types), ...(status ? { status } : {}) });
 }
@@ -562,6 +711,10 @@ function splashCanHit(stats: CombatStats, e: Entity): boolean {
 function updateProjectiles(state: MatchState, byId: Map<string, Entity>, dt: number): void {
   const remaining: Projectile[] = [];
   for (const p of state.projectiles) {
+    if (p.line) {
+      if (flyLine(state, p, dt)) remaining.push(p);
+      continue;
+    }
     const target = byId.get(p.targetId);
     const alive = target !== undefined && target.hp > 0;
     if (alive) {
@@ -583,20 +736,66 @@ function updateProjectiles(state: MatchState, byId: Map<string, Entity>, dt: num
   state.projectiles = remaining;
 }
 
+/** Advances a line shot, hitting each enemy it passes once. Returns false when it's spent. */
+function flyLine(state: MatchState, p: Projectile, dt: number): boolean {
+  const line = p.line!;
+  const source = { team: p.team, kind: kindOfDef(p.sourceDefId), defId: p.sourceDefId };
+  const stats = statsOf(source);
+  const ability = abilityOf(source, 'line')!;
+  const step = Math.min(line.travel, stats.projectileSpeed * dt);
+  const from = { x: p.x, y: p.y };
+  p.x += line.dx * step;
+  p.y += line.dy * step;
+  line.travel -= step;
+  for (const v of state.entities) {
+    if (v.team === p.team || v.hp <= 0 || v.hidden || line.hit.includes(v.id)) continue;
+    if (stats.targets === 'ground' && statsOf(v).flying) continue;
+    if (distToSegment(v, from, p) > ability.width + statsOf(v).radius) continue;
+    line.hit.push(v.id);
+    applyDamage(state, source, v, v);
+    knock(state, v, line.dx, line.dy, ability.knockback);
+  }
+  return line.travel > 1e-6;
+}
+
+function distToSegment(pt: Point, a: Point, b: Point): number {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((pt.x - a.x) * vx + (pt.y - a.y) * vy) / len2));
+  return Math.hypot(pt.x - (a.x + vx * t), pt.y - (a.y + vy * t));
+}
+
+/** Poison clouds pulse damage to every enemy inside, towers and fliers included. */
+function updateZones(state: MatchState, dt: number): void {
+  for (const z of state.zones) {
+    z.timeLeft -= dt;
+    z.tick -= dt;
+    if (z.tick > 0) continue;
+    z.tick += ZONE_TICK;
+    for (const v of state.entities) {
+      if (v.team === z.team || v.hp <= 0 || dist(v, z) - statsOf(v).radius > z.radius) continue;
+      hurt(state, v, Math.round(z.dps * ZONE_TICK * typeMultiplier(z.type, statsOf(v).types)), z.type);
+    }
+  }
+  state.zones = state.zones.filter((z) => z.timeLeft > 0);
+}
+
 function kindOfDef(defId: Entity['defId']): EntityKind {
   if (defId === 'trainer') return 'king';
   return defId in STARTERS ? 'princess' : 'unit';
 }
 
-/** True for troops that may stand in the river (fliers and leapers). */
+/** True for troops that may stand in the river (fliers, leapers, and anyone mid-jump). */
 function crossesWater(e: Entity): boolean {
-  return statsOf(e).flying || abilityOf(e, 'riverLeap') !== null;
+  return statsOf(e).flying || abilityOf(e, 'riverLeap') !== null || e.jump !== null;
 }
 
 /** Push overlapping units apart and out of towers; keep ground units off the water. */
 function separate(state: MatchState): void {
-  const units = state.entities.filter((e) => e.kind === 'unit' && e.hp > 0);
-  const towers = state.entities.filter((e) => e.kind !== 'unit' && e.hp > 0);
+  // Buildings stand their ground like towers; troops mid-jump are in the air.
+  const units = state.entities.filter((e) => !isStructure(e) && e.hp > 0 && !e.jump);
+  const towers = state.entities.filter((e) => isStructure(e) && e.hp > 0);
   for (let i = 0; i < units.length; i++) {
     const a = units[i]!;
     const sa = statsOf(a);
@@ -674,6 +873,12 @@ function resolveDeath(state: MatchState, e: Entity, kingsLost: Set<Team>): void 
     enemy.crowns = 3;
     // The trainer falling takes the remaining towers with it.
     state.entities = state.entities.filter((t) => !(t.team === e.team && t.kind === 'princess'));
+  }
+  const cloud = e.kind === 'unit' ? abilityOf(e, 'deathCloud') : null;
+  if (cloud) {
+    const z: Zone = { id: newId(state), team: e.team, x: e.x, y: e.y, radius: cloud.radius, dps: cloud.dps, type: cloud.type, timeLeft: cloud.seconds, tick: ZONE_TICK };
+    state.zones.push(z);
+    state.events.push({ type: 'cloud', id: z.id, team: e.team, x: e.x, y: e.y, radius: cloud.radius, seconds: cloud.seconds });
   }
   const boom = e.kind === 'unit' ? abilityOf(e, 'deathBlast') : null;
   if (boom) {
