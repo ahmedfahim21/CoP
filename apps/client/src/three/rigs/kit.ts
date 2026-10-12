@@ -29,9 +29,11 @@ export interface Pose {
   airborne: number;
   /** 1 when a special ability fires (heal pulse, evolution glow), decaying to 0. */
   special: number;
+  /** Rage is on. */
+  enraged: boolean;
 }
 
-export const restPose = (): Pose => ({ t: 0, speed: 0, walk: 0, attack: -1, hit: 0, land: 0, faint: -1, dormant: false, charging: false, airborne: 0, special: 0 });
+export const restPose = (): Pose => ({ t: 0, speed: 0, walk: 0, attack: -1, hit: 0, land: 0, faint: -1, dormant: false, charging: false, airborne: 0, special: 0, enraged: false });
 
 export type AttackStyle = 'bite' | 'punch' | 'slam' | 'cast' | 'breath' | 'explode' | 'throw' | 'wing' | 'spin' | 'splash' | 'beam' | 'kick';
 

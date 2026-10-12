@@ -23,6 +23,14 @@ import { buildMoltres } from './species/moltres.js';
 import { buildRapidash } from './species/rapidash.js';
 import { buildScyther } from './species/scyther.js';
 import { buildTauros } from './species/tauros.js';
+import { buildGolem } from './species/golem.js';
+import { buildHitmonlee } from './species/hitmonlee.js';
+import { buildKoffing } from './species/koffing.js';
+import { buildMagneton } from './species/magneton.js';
+import { buildMrMime } from './species/mrmime.js';
+import { buildPrimeape } from './species/primeape.js';
+import { buildStarmie } from './species/starmie.js';
+import { buildZapdos } from './species/zapdos.js';
 
 /** Every model by the defId the simulation uses (card ids, starter ids), plus both trainers. */
 export const RIG_BUILDERS = {
@@ -46,6 +54,14 @@ export const RIG_BUILDERS = {
   tauros: buildTauros,
   articuno: buildArticuno,
   moltres: buildMoltres,
+  primeape: buildPrimeape,
+  mrmime: buildMrMime,
+  magneton: buildMagneton,
+  starmie: buildStarmie,
+  koffing: buildKoffing,
+  golem: buildGolem,
+  hitmonlee: buildHitmonlee,
+  zapdos: buildZapdos,
   bulbasaur: buildBulbasaur,
   charmander: buildCharmander,
   squirtle: buildSquirtle,
