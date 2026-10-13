@@ -1,4 +1,4 @@
-import { Bot, Crown, Trophy } from 'lucide';
+import { Crown, Trophy } from 'lucide';
 import { CARDS, ELIXIR_MAX, type CardId, type ErrorMessage, type HandMessage, type Point, type Team } from '@cop/shared';
 import type { Session } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';
@@ -67,7 +67,7 @@ export class BattleHud {
     this.el = h('div', { attrs: { id: 'battle' } },
       h('div', { class: 'battle-stage' }, this.stageHost, this.barsLayer, this.textLayer, this.center),
       h('div', { class: 'hud-top' },
-        h('div', { class: 'foe-plate' }, avatar('blue'), h('div', {}, h('div', { class: 'foe-line' }, this.foeName, this.foeTag), this.foeCrowns)),
+        h('div', { class: 'foe-plate' }, avatar('blue'), h('div', {}, this.foeName, h('div', { class: 'foe-line' }, this.foeCrowns, this.foeTag))),
         this.timerBox,
       ),
       h('div', { class: 'mine-crowns' }, this.myCrowns),
@@ -310,7 +310,8 @@ export class BattleHud {
       } else {
         if (this.foeName.textContent !== p.name) {
           this.foeName.textContent = p.name;
-          this.foeTag.replaceChildren(...(p.bot ? [icon(Bot), 'Bot'] : p.profileId ? [icon(Trophy), String(p.trophies)] : []));
+          // Bots are named "… (bot)"; guests have no trophies to show.
+          this.foeTag.replaceChildren(...(p.profileId ? [icon(Trophy), String(p.trophies)] : []));
         }
         if (p.crowns !== this.crowns.foe) this.renderCrowns(this.foeCrowns, (this.crowns.foe = p.crowns), 'enemy', true);
       }
