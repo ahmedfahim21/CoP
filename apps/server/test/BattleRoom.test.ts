@@ -4,6 +4,7 @@ import { CARDS, CARD_IDS, MSG, ROOM_NAME, playCard, type HandMessage, type Match
 import { createAppServer } from '../src/app.js';
 import { BattleRoom } from '../src/BattleRoom.js';
 import type { FetchFn } from '../src/sprites.js';
+import { ProfileStore } from '../src/store.js';
 
 const RED: StarterPick = ['bulbasaur', 'charmander'];
 const BLUE: StarterPick = ['squirtle', 'charmander'];
@@ -13,7 +14,7 @@ const fetchFn = vi.fn<FetchFn>();
 let colyseus: ColyseusTestServer;
 
 beforeAll(async () => {
-  colyseus = await boot(createAppServer({ fetchFn }));
+  colyseus = await boot(createAppServer({ fetchFn, store: new ProfileStore(':memory:') }));
 });
 afterAll(async () => {
   await colyseus.shutdown();
@@ -66,9 +67,11 @@ describe('matchmaking', () => {
     expect(state.resultReason).toBe('');
     expect(state.players[a.sessionId]).toEqual({
       sessionId: a.sessionId, name: 'Ash Ketchum of P', team: 0, elixir: 5, crowns: 0, starterLeft: 'bulbasaur', starterRight: 'charmander', connected: true,
+      trophies: 0, profileId: '', bot: false,
     });
     expect(state.players[b.sessionId]).toEqual({
       sessionId: b.sessionId, name: 'Trainer', team: 1, elixir: 5, crowns: 0, starterLeft: 'squirtle', starterRight: 'charmander', connected: true,
+      trophies: 0, profileId: '', bot: false,
     });
     const towers = Object.values(state.entities);
     expect(towers).toHaveLength(6);

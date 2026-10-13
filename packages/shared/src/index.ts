@@ -4,3 +4,6 @@ export * from './starters.js';
 export * from './types.js';
 export * from './sim.js';
 export * from './protocol.js';
+export * from './ranking.js';
+export * from './profile.js';
+export * from './bot.js';

@@ -57,6 +57,11 @@ export const PlayerInfo = schema({
   starterLeft: t.string(),
   starterRight: t.string(),
   connected: t.boolean(),
+  /** Ladder trophies at the start of the battle; 0 for guests and bots. */
+  trophies: t.uint16(),
+  /** Profile tag, empty for guests and bots. */
+  profileId: t.string(),
+  bot: t.boolean(),
 }, 'PlayerInfo');
 export type PlayerInfo = SchemaType<typeof PlayerInfo>;
 
@@ -74,5 +79,7 @@ export const BattleState = schema({
   winner: t.int8(),
   /** Empty while playing. */
   resultReason: t.string(),
+  /** 'ranked' | 'friendly' | 'training' | 'casual'. */
+  mode: t.string(),
 }, 'BattleState');
 export type BattleState = SchemaType<typeof BattleState>;
