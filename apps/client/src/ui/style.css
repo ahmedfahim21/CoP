@@ -495,13 +495,74 @@ h1, h2 { margin: 0; }
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
 
-/* --- Boot loader --------------------------------------------------------- */
-.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; background: var(--dots), var(--bg); }
-.boot-title { font-size: 32px; text-align: center; background: var(--primary); border: 3px solid var(--ink); box-shadow: var(--shadow-lg); padding: 6px 16px 8px; }
-.boot-bar { width: min(320px, 80%); height: 22px; border: 2px solid var(--ink); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
-.boot-fill { width: 0; height: 100%; background: var(--elixir); transition: width 150ms; }
-.boot-label { font-size: 15px; text-align: center; }
-.boot.failed .boot-label { color: var(--destructive); }
+/* --- Boot: loading, then the title screen ------------------------------- */
+.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--primary); }
+.boot-rays {
+  position: absolute; left: 50%; top: 34%; width: 260vmax; height: 260vmax; translate: -50% -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.32) 0deg 9deg, transparent 9deg 18deg);
+  animation: rays 40s linear infinite; pointer-events: none;
+}
+.boot::after { content: ''; position: absolute; inset: 0; background: radial-gradient(rgba(0,0,0,0.16) 1.2px, transparent 1.5px) 0 0 / 16px 16px; pointer-events: none; }
+@keyframes rays { to { rotate: 360deg; } }
+.boot-stage { position: relative; z-index: 1; width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
+
+.boot-logo { display: flex; flex-direction: column; align-items: center; line-height: 0.92; rotate: -4deg; animation: logo-in 700ms cubic-bezier(.2,1.5,.4,1) both; }
+.boot-logo span { font-family: var(--head); text-transform: uppercase; letter-spacing: 0.01em; }
+.boot-logo-top, .boot-logo-bottom { font-size: clamp(40px, 13vw, 64px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--ink); }
+.boot-logo-top { color: var(--destructive); }
+.boot-logo-of { font-size: 18px; background: var(--ink); color: var(--primary); padding: 2px 10px 4px; margin: 4px 0 6px; rotate: 4deg; }
+@keyframes logo-in { from { scale: 2.2; opacity: 0; rotate: -14deg; } }
+
+/* The ball wobbles like a catch in progress, then clicks shut when everything is in. */
+.boot-ball {
+  position: relative; width: 84px; height: 84px; border-radius: 50%; border: 4px solid var(--ink);
+  background: linear-gradient(var(--destructive) 0 45%, var(--ink) 45% 55%, #fff 55%);
+  box-shadow: 6px 6px 0 0 var(--ink); transform-origin: 50% 90%; animation: wobble 1.6s ease-in-out infinite;
+}
+.boot-ball i { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; translate: -50% -50%; border-radius: 50%; background: #fff; border: 4px solid var(--ink); }
+.boot-ball i::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 2px solid var(--ink); }
+@keyframes wobble { 0%, 55%, 100% { rotate: 0deg; } 10% { rotate: -22deg; } 22% { rotate: 18deg; } 34% { rotate: -10deg; } 44% { rotate: 5deg; } }
+.boot.ready .boot-ball { animation: caught 600ms cubic-bezier(.2,1.6,.4,1) both; }
+.boot.ready .boot-ball i { background: var(--primary); box-shadow: 0 0 0 6px rgba(255,255,255,0.6); }
+@keyframes caught { 0% { scale: 1; } 40% { scale: 1.25 0.8; } 100% { scale: 1; } }
+
+/* "Who's that Pokémon?": silhouettes fill in as their models arrive. */
+.boot-dex { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; width: 100%; background: var(--card); border: 3px solid var(--ink); box-shadow: var(--shadow-lg); padding: 8px; }
+.boot-mon { aspect-ratio: 1; display: grid; place-items: center; background: var(--bg); border: 1.5px solid var(--ink); overflow: hidden; }
+.boot-mon img { width: 120%; height: 120%; object-fit: contain; image-rendering: pixelated; filter: brightness(0); opacity: 0.55; transition: filter 250ms, opacity 250ms; }
+.boot-mon.caught { background: var(--accent); animation: mon-pop 380ms cubic-bezier(.2,1.6,.4,1); }
+.boot-mon.caught img { filter: none; opacity: 1; }
+@keyframes mon-pop { 40% { scale: 1.25; } }
+
+.boot-progress { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.boot-progress[hidden] { display: none; }
+.boot-label { display: flex; justify-content: space-between; font-family: var(--head); font-size: 15px; }
+.boot-count { font-variant-numeric: tabular-nums; }
+.boot-bar { position: relative; height: 22px; border: 3px solid var(--ink); background: var(--card); box-shadow: var(--shadow-md); overflow: hidden; }
+.boot-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: repeating-linear-gradient(135deg, var(--elixir) 0 10px, #ff6be0 10px 20px); background-size: 28px 28px; animation: stripes 600ms linear infinite; transition: width 200ms ease-out; }
+@keyframes stripes { to { background-position: 28px 0; } }
+.boot-ticks { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(10, 1fr); }
+.boot-ticks i { border-right: 2px solid var(--ink); }
+.boot-ticks i:last-child { border-right: 0; }
+.btn.boot-play { width: 100%; font-size: 30px; padding: 12px 20px 14px; border-width: 3px; box-shadow: var(--shadow-lg); background: var(--card); animation: pop-in 300ms cubic-bezier(.2,1.5,.4,1) both, play-bob 1.1s ease-in-out 300ms infinite; }
+.boot-play[hidden] { display: none; }
+@keyframes play-bob { 50% { translate: 0 -4px; box-shadow: 9px 9px 0 0 var(--ink); } }
+
+.boot-tip { width: 100%; display: flex; align-items: flex-start; gap: 8px; background: var(--ink); color: #fff; padding: 8px 10px; box-shadow: 5px 5px 0 0 var(--destructive); min-height: 56px; }
+.boot-tip-tag { flex: none; font-family: var(--head); font-size: 12px; background: var(--primary); color: var(--ink); padding: 0 6px 1px; margin-top: 1px; }
+.boot-tip-text { font-size: 13px; line-height: 1.4; }
+.boot-tip-text.in { animation: tip-in 300ms ease-out; }
+@keyframes tip-in { from { opacity: 0; translate: 12px 0; } }
+
+.boot.failed .boot-ball { animation: none; filter: grayscale(1); }
+.boot.failed .boot-label { color: var(--destructive); font-family: var(--sans); font-size: 14px; }
+.boot.leaving { animation: boot-out 520ms cubic-bezier(.6,0,.8,.4) forwards; pointer-events: none; }
+@keyframes boot-out { to { translate: 0 -105%; } }
+@media (max-height: 640px) {
+  .boot-dex { grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); }
+  .boot-ball { width: 64px; height: 64px; }
+  .boot-stage { gap: 12px; }
+}
 
 /* --- Wide screens ----------------------------------------------------------
  * The game stays phone-shaped: a centred column, framed with a hard shadow, between

@@ -8,7 +8,7 @@ import { ResultScreen, matchmakingOverlay } from './ui/overlays.js';
 
 type Mode = 'ranked' | 'training' | 'create' | { code: string };
 
-await bootModels();
+await bootModels({ splash: true });
 
 const prefs = loadPrefs();
 const profiles = new ProfileSession(prefs);

@@ -22,11 +22,12 @@ const BASE = `${import.meta.env.BASE_URL}models/`;
 const models = new Map<string, { gltf: GLTF; info: ModelInfo }>();
 
 /** Loads every model in the manifest. Must finish before any rig is built; fails loudly. */
-export async function loadModels(onProgress?: (done: number, total: number) => void): Promise<void> {
+export async function loadModels(onProgress?: (done: number, total: number, name: string) => void, onManifest?: (names: string[]) => void): Promise<void> {
   const res = await fetch(`${BASE}manifest.json`);
   if (!res.ok) throw new Error(`Model manifest failed to load: ${res.status}`);
   const manifest = (await res.json()) as Record<string, ModelInfo>;
   const names = Object.keys(manifest);
+  onManifest?.(names);
   // Models are Draco-compressed; the decoder is three's own, vendored into public/draco.
   const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
@@ -36,7 +37,7 @@ export async function loadModels(onProgress?: (done: number, total: number) => v
       throw new Error(`Model "${name}" failed to load: ${err instanceof Error ? err.message : String(err)}`);
     });
     models.set(name, { gltf, info: manifest[name]! });
-    onProgress?.(++done, names.length);
+    onProgress?.(++done, names.length, name);
   }));
   draco.dispose();
 }
