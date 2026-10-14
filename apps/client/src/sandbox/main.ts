@@ -81,11 +81,12 @@ function run(sc: Scenario, team: Team) {
       textLayer.append(el);
       el.addEventListener('animationend', () => el.remove(), { once: true });
     },
-  });
+  }, Number(new URLSearchParams(location.search).get('zoom')) || undefined);
   timer = window.setInterval(() => source.tick(), TICK * 1000);
   note.replaceChildren(sc.title, h('small', { textContent: sc.note }));
   renderBar();
-  history.replaceState(null, '', `?scene=${sc.id}&side=${team}`);
+  const zoom = new URLSearchParams(location.search).get('zoom');
+  history.replaceState(null, '', `?scene=${sc.id}&side=${team}${zoom ? `&zoom=${zoom}` : ''}`);
 }
 
 function renderBar() {
