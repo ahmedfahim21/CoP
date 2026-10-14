@@ -12,7 +12,7 @@ import { BOT_DECKS, BattleRoom } from '../src/BattleRoom.js';
 import { QueueRoom } from '../src/QueueRoom.js';
 import { ProfileStore } from '../src/store.js';
 import { testRpc } from './pglite.js';
-import { isDeck } from '@cop/shared';
+import { QUICK_RULES, isDeck } from '@cop/shared';
 
 const RED: StarterPick = ['bulbasaur', 'charmander'];
 const BLUE: StarterPick = ['squirtle', 'charmander'];
@@ -250,8 +250,13 @@ describe('training', () => {
     await vi.waitFor(() => expect(room.state.phase).toBe('countdown'));
     room.setSimulationInterval();
     const match = matchOf(room);
+    // Training is the quick format: weaker towers, a 2:00 clock.
+    expect(match.rules).toBe(QUICK_RULES);
+    expect(match.entities.filter((e) => e.kind === 'king').map((e) => e.maxHp)).toEqual([2400, 2400]);
+    expect(match.entities.filter((e) => e.kind === 'princess').every((e) => e.maxHp === 1500 && e.hp === 1500)).toBe(true);
+    expect(room.state.entities.get(match.entities.find((e) => e.kind === 'king')!.id)!.maxHp).toBe(2400);
     match.phase = 'regular';
-    match.timeLeft = 180;
+    match.timeLeft = 120;
     match.players[1].elixir = 10;
     for (let i = 0; i < 200 && !match.entities.some((e) => e.team === 1 && e.kind === 'unit'); i++) room['tick'](0.05);
     expect(match.entities.some((e) => e.team === 1 && e.kind === 'unit')).toBe(true);

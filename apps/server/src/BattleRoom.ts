@@ -1,6 +1,6 @@
 import { Room, ServerError, logger, matchMaker, type Client } from 'colyseus';
 import {
-  Bot, CARDS, DEFAULT_DECK, MSG, ROOM_NAME, STARTERS, TRAINER, createMatch, forfeit, isCharging, isDeck, isDoubleElixir, isStarterPick, playCard,
+  Bot, CARDS, DEFAULT_DECK, MSG, ROOM_NAME, STARTERS, TRAINER, createMatch, rulesFor, forfeit, isCharging, isDeck, isDoubleElixir, isStarterPick, playCard,
   sanitizeTrainerName, seededRandom, step,
   type BattleStats, type CardId, type ErrorMessage, type HandMessage, type JoinOptions, type MatchMode, type MatchState, type PlayMessage,
   type RematchMessage, type RematchStateMessage, type StarterPick, type SummaryMessage, type Team,
@@ -218,7 +218,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
       this.mode = 'casual';
       this.state.mode = 'casual';
     }
-    this.match = createMatch([a.starters, b.starters], Math.floor(Math.random() * 2 ** 31), [a.deck, b.deck]);
+    this.match = createMatch([a.starters, b.starters], Math.floor(Math.random() * 2 ** 31), [a.deck, b.deck], rulesFor(this.mode));
     this.syncState();
     for (const client of this.clients) this.sendHand(client);
     this.setSimulationInterval((dtMs) => this.tick(Math.min(dtMs / 1000, MAX_DT)), TICK_MS);
