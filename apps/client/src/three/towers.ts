@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { litMat } from './style/toon.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { PALETTE, seeded, shade, staticMat, teamColor, teamDark } from './palette.js';
+import { PALETTE, seeded, shade, staticMat, teamColor } from './palette.js';
 
 export type TowerKind = 'king' | 'princess';
 
@@ -53,66 +54,75 @@ function masonryTexture(base: number, key: string): THREE.CanvasTexture {
   return tex;
 }
 
-/** Banner cloth with a Poké Ball emblem, team coloured. */
-function bannerTexture(color: number, crown: boolean): THREE.CanvasTexture {
+const emblemTextures = new Map<number, THREE.CanvasTexture>();
+
+/** A Poké Ball face: top half in the team colour, white below, black band and button ring. */
+function emblemTexture(top: number): THREE.CanvasTexture {
+  const cached = emblemTextures.get(top);
+  if (cached) return cached;
   const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 192;
+  c.width = 256;
+  c.height = 256;
   const g = c.getContext('2d')!;
   const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
-  g.fillStyle = hex(color);
+  const cx = 128;
+  const r = 124;
+  g.fillStyle = '#f6f3ec';
   g.beginPath();
-  g.moveTo(0, 0);
-  g.lineTo(128, 0);
-  g.lineTo(128, 160);
-  g.lineTo(64, 192);
-  g.lineTo(0, 160);
-  g.closePath();
+  g.arc(cx, cx, r, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = hex(PALETTE.gold);
-  g.lineWidth = 8;
-  g.stroke();
-  // Emblem.
-  const cx = 64;
-  const cy = 80;
-  g.fillStyle = '#f4f1ea';
+  g.fillStyle = hex(top);
   g.beginPath();
-  g.arc(cx, cy, 34, 0, Math.PI * 2);
+  g.arc(cx, cx, r, Math.PI, 0);
   g.fill();
-  g.fillStyle = crown ? hex(PALETTE.gold) : hex(shade(color, 0.12));
+  // Gloss on the top half.
+  g.fillStyle = 'rgba(255,255,255,0.28)';
   g.beginPath();
-  g.arc(cx, cy, 34, Math.PI, 0);
+  g.ellipse(cx - 40, cx - 66, 36, 18, -0.5, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = '#2a2a2a';
-  g.fillRect(cx - 34, cy - 4, 68, 8);
+  g.fillStyle = '#1d1d22';
+  g.fillRect(cx - r, cx - 13, r * 2, 26);
   g.beginPath();
-  g.arc(cx, cy, 12, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#f4f1ea';
-  g.beginPath();
-  g.arc(cx, cy, 7, 0, Math.PI * 2);
+  g.arc(cx, cx, 44, 0, Math.PI * 2);
   g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  emblemTextures.set(top, tex);
   return tex;
 }
 
+/** A Poké Ball emblem facing +Z: printed disc, dark rim and a raised white button. */
+function emblem(radius: number, top: number): THREE.Group {
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(new THREE.CircleGeometry(radius, 40), litMat({ map: emblemTexture(top), roughness: 0.5 }));
+  face.position.z = 0.02;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * 0.07, 8, 40), staticMat(0x1d1d22, { roughness: 0.6 }));
+  const button = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.22, radius * 0.24, radius * 0.16, 24), staticMat(0xf6f3ec, { roughness: 0.4 }));
+  button.rotation.x = Math.PI / 2;
+  button.position.z = radius * 0.08;
+  for (const m of [face, rim, button]) {
+    m.castShadow = false;
+    m.receiveShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
 /**
- * A tower is a plinth, a masonry drum, a team-coloured trim band, a crenellated parapet and a
- * wooden deck the occupant stands on. The king tower is larger, with gold trim, a gate and
- * two flags. `facing` is +1 when the tower's owner looks from +Z (team 0), -1 otherwise.
+ * A tower in the style of the concept art: a squat block of pale masonry on a slab, a big
+ * Poké Ball emblem on its faces, and a parapet basin with team-coloured corner cushions that
+ * the starter (or the trainer, on the king tower) sits down inside. `facing` is +1 when the
+ * tower's owner looks from +Z (team 0), -1 otherwise.
  */
 export function buildTower(kind: TowerKind, mine: boolean, facing: 1 | -1): TowerModel {
   const king = kind === 'king';
   const group = new THREE.Group();
   const intact = new THREE.Group();
   group.add(intact);
-  const size = king ? 3.5 : 2.7;
-  const bodyH = king ? 2.9 : 2.45;
-  const plinthH = 0.32;
+  const size = king ? 3.4 : 2.6;
+  const bodyH = king ? 2.4 : 2.0;
+  const plinthH = 0.26;
   const color = teamColor(mine);
-  const dark = teamDark(mine);
-  const trim = king ? PALETTE.gold : color;
   const rnd = seeded((king ? 7 : 3) + (mine ? 0 : 50));
 
   const add = (mesh: THREE.Mesh, parent: THREE.Object3D = intact) => {
@@ -122,85 +132,61 @@ export function buildTower(kind: TowerKind, mine: boolean, facing: 1 | -1): Towe
     return mesh;
   };
 
-  // Plinth.
-  const plinth = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.5, plinthH, size + 0.5, 2, 0.08), staticMat(PALETTE.stoneDeep)));
+  // Slab.
+  const plinth = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.6, plinthH, size + 0.6, 2, 0.08), staticMat(PALETTE.stoneDark)));
   plinth.position.y = plinthH / 2;
 
-  // Masonry body, slightly tapered by stacking two boxes.
-  const tex = masonryTexture(PALETTE.stone, kind).clone();
+  // Pale masonry body with a darker footing course.
+  const tex = masonryTexture(PALETTE.towerStone, kind).clone();
   tex.needsUpdate = true;
-  tex.repeat.set(size / 1.4, bodyH / 1.2);
-  const bodyMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92 });
-  const body = add(new THREE.Mesh(new RoundedBoxGeometry(size, bodyH, size, 3, 0.14), bodyMat));
+  tex.repeat.set(size / 1.3, bodyH / 1.05);
+  const body = add(new THREE.Mesh(new RoundedBoxGeometry(size, bodyH, size, 3, 0.12), litMat({ map: tex, roughness: 0.9 })));
   body.position.y = plinthH + bodyH / 2;
-  // Corner buttresses.
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-    const b = add(new THREE.Mesh(new RoundedBoxGeometry(0.5, bodyH + 0.1, 0.5, 2, 0.08), staticMat(PALETTE.stoneLight)));
-    b.position.set((x * size) / 2, plinthH + bodyH / 2, (z * size) / 2);
-  }
+  const footing = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.12, 0.3, size + 0.12, 2, 0.06), staticMat(PALETTE.stone)));
+  footing.position.y = plinthH + 0.15;
 
   const topY = plinthH + bodyH;
-  // Trim band.
-  const band = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.22, 0.24, size + 0.22, 2, 0.06), staticMat(trim, { roughness: king ? 0.45 : 0.7, metalness: king ? 0.35 : 0 })));
-  band.position.y = topY + 0.08;
-  const band2 = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.1, 0.1, size + 0.1, 1, 0.04), staticMat(dark)));
-  band2.position.y = topY - 0.12;
+  // Team band under the parapet.
+  const band = add(new THREE.Mesh(new RoundedBoxGeometry(size + 0.12, 0.12, size + 0.12, 2, 0.04), staticMat(color, { roughness: 0.55 })));
+  band.position.y = topY - 0.1;
 
-  // Deck.
-  const deck = add(new THREE.Mesh(new THREE.BoxGeometry(size - 0.3, 0.08, size - 0.3), staticMat(PALETTE.woodLight)));
-  deck.position.y = topY + 0.22;
-  for (let i = -2; i <= 2; i++) {
-    const seam = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, size - 0.3), staticMat(PALETTE.woodDark)));
-    seam.position.set((i * (size - 0.3)) / 5, topY + 0.225, 0);
+  // Parapet basin: stone walls capped in team colour, with big cushioned corners.
+  const wallH = 0.26;
+  const wallT = 0.26;
+  const inner = size - 0.2;
+  const wallMat = staticMat(shade(PALETTE.towerStone, -0.02));
+  const capMat = staticMat(PALETTE.stoneLight);
+  for (const [x, z, w, d] of [
+    [0, -inner / 2 + wallT / 2, inner, wallT], [0, inner / 2 - wallT / 2, inner, wallT],
+    [-inner / 2 + wallT / 2, 0, wallT, inner], [inner / 2 - wallT / 2, 0, wallT, inner],
+  ] as const) {
+    const wall = add(new THREE.Mesh(new RoundedBoxGeometry(w, wallH, d, 2, 0.05), wallMat));
+    wall.position.set(x, topY + 0.08 + wallH / 2, z);
+    const cap = add(new THREE.Mesh(new RoundedBoxGeometry(w + 0.04, 0.1, d + 0.04, 2, 0.04), capMat));
+    cap.position.set(x, topY + 0.08 + wallH + 0.03, z);
   }
-
-  // Crenellations around the parapet.
-  const merlonGeo = new RoundedBoxGeometry(0.42, 0.42, 0.34, 2, 0.06);
-  const n = king ? 5 : 4;
-  for (let i = 0; i < n; i++) {
-    const t = -size / 2 + 0.26 + (i * (size - 0.52)) / (n - 1);
-    for (const [x, z, ry] of [[t, -size / 2, 0], [t, size / 2, 0], [-size / 2, t, Math.PI / 2], [size / 2, t, Math.PI / 2]] as const) {
-      const m = add(new THREE.Mesh(merlonGeo, staticMat(shade(PALETTE.stoneLight, (rnd() - 0.5) * 0.05))));
-      m.position.set(x, topY + 0.42, z);
-      m.rotation.y = ry;
-    }
+  const cushion = new RoundedBoxGeometry(king ? 0.62 : 0.52, king ? 0.5 : 0.44, king ? 0.62 : 0.52, 3, 0.14);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+    const c = add(new THREE.Mesh(cushion, staticMat(shade(color, (rnd() - 0.5) * 0.03), { roughness: 0.5 })));
+    c.position.set((x * (size - 0.42)) / 2, topY + 0.08 + (king ? 0.25 : 0.22), (z * (size - 0.42)) / 2);
   }
+  // Flagstone floor inside the basin.
+  const deck = add(new THREE.Mesh(new THREE.BoxGeometry(inner - wallT * 2 + 0.05, 0.08, inner - wallT * 2 + 0.05), staticMat(PALETTE.stoneDark)));
+  deck.position.y = topY + 0.12;
 
-  // Banners hang on the face toward each camera.
-  const banner = new THREE.MeshStandardMaterial({ map: bannerTexture(color, king), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9 });
+  // Poké Ball emblems on the two faces the cameras see.
   for (const f of [1, -1]) {
-    const geo = new THREE.PlaneGeometry(king ? 1.1 : 0.85, king ? 1.6 : 1.25);
-    const m = add(new THREE.Mesh(geo, banner));
-    m.position.set(0, topY - (king ? 0.95 : 0.8), f * (size / 2 + 0.03));
-    if (f < 0) m.rotation.y = Math.PI;
-    m.castShadow = false;
+    const e = emblem(king ? 0.78 : 0.6, color);
+    e.position.set(0, plinthH + bodyH * 0.5, f * (size / 2 + 0.01));
+    if (f < 0) e.rotation.y = Math.PI;
+    intact.add(e);
   }
-
-  // King's gate on the owner's side.
+  // The king's tower also wears gold Poké Ball finials on its front corners.
   if (king) {
-    const gate = add(new THREE.Mesh(new RoundedBoxGeometry(1.1, 1.0, 0.2, 2, 0.08), staticMat(PALETTE.woodDark)));
-    gate.position.set(0, plinthH + 0.5, facing * (size / 2 + 0.02));
-    const arch = add(new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.1, 6, 16, Math.PI), staticMat(PALETTE.stoneLight)));
-    arch.position.set(0, plinthH + 1.0, facing * (size / 2 + 0.06));
-    // Gate banner sits above the arch instead, so move the owner-side banner up.
-  }
-
-  // Flags on poles: waving cloth driven per frame.
-  const flags: Array<{ geo: THREE.PlaneGeometry; base: Float32Array; phase: number }> = [];
-  const poleSpots: Array<[number, number]> = king
-    ? [[-size / 2 + 0.2, -facing * (size / 2 - 0.2)], [size / 2 - 0.2, -facing * (size / 2 - 0.2)]]
-    : [[size / 2 - 0.2, -facing * (size / 2 - 0.2)]];
-  for (const [x, z] of poleSpots) {
-    const poleH = king ? 2.3 : 1.8;
-    const pole = add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, poleH, 6), staticMat(PALETTE.woodDark)));
-    pole.position.set(x, topY + poleH / 2, z);
-    const knob = add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), staticMat(PALETTE.gold, { roughness: 0.4, metalness: 0.4 })));
-    knob.position.set(x, topY + poleH + 0.05, z);
-    const geo = new THREE.PlaneGeometry(0.9, 0.55, 10, 3);
-    geo.translate(0.45, 0, 0);
-    const flag = add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 0.85 })));
-    flag.position.set(x + 0.04, topY + poleH - 0.32, z);
-    flags.push({ geo, base: Float32Array.from(geo.attributes.position!.array as Float32Array), phase: rnd() * 6 });
+    for (const x of [-1, 1]) {
+      const finial = add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), staticMat(PALETTE.gold, { roughness: 0.35, metalness: 0.45 })));
+      finial.position.set((x * (size - 0.42)) / 2, topY + 0.08 + 0.5 + 0.16, (facing * (size - 0.42)) / 2);
+    }
   }
 
   // Rubble, hidden until the tower falls.
@@ -211,7 +197,7 @@ export function buildTower(kind: TowerKind, mine: boolean, facing: 1 | -1): Towe
   const stoneGeo = new THREE.DodecahedronGeometry(1, 0);
   for (let i = 0; i < (king ? 18 : 13); i++) {
     const r = 0.25 + rr() * 0.45;
-    const m = new THREE.Mesh(stoneGeo, staticMat(shade(PALETTE.stone, (rr() - 0.6) * 0.18), { roughness: 0.95 }));
+    const m = new THREE.Mesh(stoneGeo, staticMat(shade(PALETTE.towerStone, (rr() - 0.6) * 0.2), { roughness: 0.95 }));
     m.scale.set(r, r * 0.7, r * (0.8 + rr() * 0.4));
     const a = rr() * Math.PI * 2;
     const d = rr() * size * 0.42;
@@ -221,32 +207,27 @@ export function buildTower(kind: TowerKind, mine: boolean, facing: 1 | -1): Towe
     m.receiveShadow = true;
     rubble.add(m);
   }
-  const scorch = new THREE.Mesh(new THREE.CircleGeometry(size * 0.62, 24), new THREE.MeshStandardMaterial({ color: 0x3b352d, transparent: true, opacity: 0.55 }));
+  // A cracked cushion in the team colour marks whose tower it was.
+  const broken = new THREE.Mesh(cushion, staticMat(color, { roughness: 0.6 }));
+  broken.position.set(size * 0.18, 0.3, -size * 0.1);
+  broken.rotation.set(0.5, 0.7, 0.3);
+  broken.castShadow = true;
+  rubble.add(broken);
+  const scorch = new THREE.Mesh(new THREE.CircleGeometry(size * 0.62, 24), litMat({ color: 0x3b352d, transparent: true, opacity: 0.55 }));
   scorch.rotation.x = -Math.PI / 2;
   scorch.position.y = 0.02;
   rubble.add(scorch);
 
   return {
     group,
-    standY: topY + 0.26,
-    topY: topY + (king ? 2.6 : 2.2),
+    // Feet sit below the parapet, so the occupant reads as sitting inside the tower.
+    standY: topY + 0.22,
+    topY: topY + (king ? 2.4 : 2.1),
     ruin() {
       intact.visible = false;
       rubble.visible = true;
     },
-    update(_dt, t) {
-      for (const f of flags) {
-        const pos = f.geo.attributes.position!;
-        const arr = pos.array as Float32Array;
-        for (let i = 0; i < arr.length; i += 3) {
-          const x = f.base[i]!;
-          arr[i + 2] = Math.sin(x * 5 - t * 6 + f.phase) * 0.09 * x;
-          arr[i + 1] = f.base[i + 1]! - x * 0.05;
-        }
-        pos.needsUpdate = true;
-        f.geo.computeVertexNormals();
-      }
-    },
+    update() {},
   };
 }
 

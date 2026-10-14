@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { litMat } from './style/toon.js';
 import { ARENA_W, BRIDGE_XS, CARDS, FORMS, STARTERS, statsOf, unitStats, type Ability, type Entity, type StarterId, type Team, type UnitId } from '@cop/shared';
 import { toScene, dampAngle } from './coords.js';
 import { SnapshotBuffer } from './interp.js';
@@ -40,7 +41,7 @@ export interface UnitOptions {
 }
 
 const moundGeo = new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-const moundMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 1 });
+const moundMat = litMat({ color: 0x6b4a2a, roughness: 1 });
 
 export class UnitView {
   readonly holder = new THREE.Group();
@@ -384,8 +385,8 @@ export class TowerView {
     this.model = buildTower(this.kind, mine, team === 0 ? 1 : -1);
     this.model.group.position.set(x, 0, z);
     this.occupant = buildRig(this.kind === 'king' ? (mine ? 'red' : 'blue') : defId);
-    // Towers are tall; scale the occupant so it reads from the top.
-    this.occupant.root.scale.setScalar(this.kind === 'king' ? 1.3 : 1.75);
+    // The occupant fills the tower top, as in the concept art, so it reads from above.
+    this.occupant.root.scale.setScalar(this.kind === 'king' ? 1.55 : 2.25);
     this.occupant.root.position.y = this.model.standY;
     this.model.group.add(this.occupant.root);
     this.baseYaw = homeYaw(team);
@@ -513,7 +514,7 @@ export class ProjectileView {
         break;
       }
       case 'water': {
-        const m = mesh(projGeo.sphere, new THREE.MeshStandardMaterial({ color: 0x5ab8f5, roughness: 0.1, emissive: 0x1b5f9a }), 0.15);
+        const m = mesh(projGeo.sphere, litMat({ color: 0x5ab8f5, roughness: 0.1, emissive: 0x1b5f9a }), 0.15);
         m.scale.set(0.15, 0.15, 0.32);
         this.group.add(m);
         break;
@@ -523,7 +524,7 @@ export class ProjectileView {
         break;
       case 'grass':
         for (let i = 0; i < 3; i++) {
-          const leaf = new THREE.Mesh(projGeo.leaf, new THREE.MeshStandardMaterial({ color: 0x5ab44a, side: THREE.DoubleSide, roughness: 0.6 }));
+          const leaf = new THREE.Mesh(projGeo.leaf, litMat({ color: 0x5ab44a, side: THREE.DoubleSide, roughness: 0.6 }));
           leaf.scale.setScalar(0.32);
           leaf.position.set(Math.cos((i / 3) * Math.PI * 2) * 0.16, Math.sin((i / 3) * Math.PI * 2) * 0.16, 0);
           leaf.castShadow = true;
@@ -531,15 +532,15 @@ export class ProjectileView {
         }
         break;
       case 'ice': {
-        const c = mesh(projGeo.crystal, new THREE.MeshStandardMaterial({ color: 0xc8f4ff, roughness: 0.15, metalness: 0.1, emissive: 0x4fc3e8, emissiveIntensity: 0.6 }), 0.17);
+        const c = mesh(projGeo.crystal, litMat({ color: 0xc8f4ff, roughness: 0.15, metalness: 0.1, emissive: 0x4fc3e8, emissiveIntensity: 0.6 }), 0.17);
         c.scale.set(0.12, 0.12, 0.26);
         this.group.add(c);
         break;
       }
       case 'normal': {
         // Poké Ball.
-        const top = mesh(projGeo.dome, new THREE.MeshStandardMaterial({ color: 0xe5483f, roughness: 0.3 }), 0.13);
-        const bottom = mesh(projGeo.dome, new THREE.MeshStandardMaterial({ color: 0xf3f1ea, roughness: 0.3 }), 0.13);
+        const top = mesh(projGeo.dome, litMat({ color: 0xe5483f, roughness: 0.3 }), 0.13);
+        const bottom = mesh(projGeo.dome, litMat({ color: 0xf3f1ea, roughness: 0.3 }), 0.13);
         bottom.rotation.x = Math.PI;
         this.group.add(top, bottom);
         break;
