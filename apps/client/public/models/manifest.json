@@ -1,0 +1,438 @@
+{
+  "articuno": {
+    "height": 1.4,
+    "flyHeight": 1.7,
+    "attackStyle": "cast",
+    "attackDuration": 0.6,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 6128
+  },
+  "blue": {
+    "height": 1.9,
+    "flyHeight": 0.0,
+    "attackStyle": "throw",
+    "attackDuration": 0.6,
+    "clips": [
+      "idle",
+      "dormant",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 6084
+  },
+  "bulbasaur": {
+    "height": 1.1,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 11918
+  },
+  "chansey": {
+    "height": 1.25,
+    "flyHeight": 0.0,
+    "attackStyle": "punch",
+    "attackDuration": 0.45,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "special",
+      "faint"
+    ],
+    "triangles": 6028
+  },
+  "charizard": {
+    "height": 1.9,
+    "flyHeight": 1.0,
+    "attackStyle": "breath",
+    "attackDuration": 0.7,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 5456
+  },
+  "charmander": {
+    "height": 1.2,
+    "flyHeight": 0.0,
+    "attackStyle": "breath",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7600
+  },
+  "dugtrio": {
+    "height": 0.95,
+    "flyHeight": 0.0,
+    "attackStyle": "bite",
+    "attackDuration": 0.4,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7580
+  },
+  "gengar": {
+    "height": 1.35,
+    "flyHeight": 0.0,
+    "attackStyle": "punch",
+    "attackDuration": 0.5,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7782
+  },
+  "geodude": {
+    "height": 1.15,
+    "flyHeight": 0.0,
+    "attackStyle": "punch",
+    "attackDuration": 0.5,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7790
+  },
+  "golem": {
+    "height": 1.7,
+    "flyHeight": 0.0,
+    "attackStyle": "throw",
+    "attackDuration": 0.8,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 8282
+  },
+  "gyarados": {
+    "height": 2.8,
+    "flyHeight": 0.0,
+    "attackStyle": "bite",
+    "attackDuration": 0.65,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 6792
+  },
+  "hitmonlee": {
+    "height": 1.55,
+    "flyHeight": 0.0,
+    "attackStyle": "kick",
+    "attackDuration": 0.45,
+    "clips": [
+      "idle",
+      "walk",
+      "leap",
+      "attack",
+      "faint"
+    ],
+    "triangles": 8916
+  },
+  "jolteon": {
+    "height": 1.05,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.45,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7354
+  },
+  "koffing": {
+    "height": 1.0,
+    "flyHeight": 1.3,
+    "attackStyle": "slam",
+    "attackDuration": 0.6,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 5720
+  },
+  "lapras": {
+    "height": 1.75,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.6,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 8042
+  },
+  "machop": {
+    "height": 1.4,
+    "flyHeight": 0.0,
+    "attackStyle": "punch",
+    "attackDuration": 0.45,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 8872
+  },
+  "magikarp": {
+    "height": 1.05,
+    "flyHeight": 0.0,
+    "attackStyle": "splash",
+    "attackDuration": 0.7,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "special",
+      "faint"
+    ],
+    "triangles": 8560
+  },
+  "magneton": {
+    "height": 1.6,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.3,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 9700
+  },
+  "moltres": {
+    "height": 1.4,
+    "flyHeight": 1.6,
+    "attackStyle": "beam",
+    "attackDuration": 0.4,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 5168
+  },
+  "mrmime": {
+    "height": 1.35,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.5,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7288
+  },
+  "pikachu": {
+    "height": 1.25,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7632
+  },
+  "primeape": {
+    "height": 1.15,
+    "flyHeight": 0.0,
+    "attackStyle": "punch",
+    "attackDuration": 0.35,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7754
+  },
+  "rapidash": {
+    "height": 1.75,
+    "flyHeight": 0.0,
+    "attackStyle": "kick",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "leap",
+      "attack",
+      "faint"
+    ],
+    "triangles": 5804
+  },
+  "rattata": {
+    "height": 0.85,
+    "flyHeight": 0.0,
+    "attackStyle": "bite",
+    "attackDuration": 0.4,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 8864
+  },
+  "red": {
+    "height": 1.9,
+    "flyHeight": 0.0,
+    "attackStyle": "throw",
+    "attackDuration": 0.6,
+    "clips": [
+      "idle",
+      "dormant",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 6340
+  },
+  "scyther": {
+    "height": 1.4,
+    "flyHeight": 0.0,
+    "attackStyle": "spin",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 5368
+  },
+  "snorlax": {
+    "height": 2.6,
+    "flyHeight": 0.0,
+    "attackStyle": "slam",
+    "attackDuration": 0.75,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7674
+  },
+  "squirtle": {
+    "height": 1.2,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.5,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 10888
+  },
+  "starmie": {
+    "height": 1.4,
+    "flyHeight": 0.0,
+    "attackStyle": "cast",
+    "attackDuration": 0.35,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 952
+  },
+  "tauros": {
+    "height": 1.35,
+    "flyHeight": 0.0,
+    "attackStyle": "kick",
+    "attackDuration": 0.5,
+    "clips": [
+      "idle",
+      "walk",
+      "charge",
+      "attack",
+      "faint"
+    ],
+    "triangles": 7986
+  },
+  "voltorb": {
+    "height": 0.95,
+    "flyHeight": 0.0,
+    "attackStyle": "explode",
+    "attackDuration": 0.35,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 1952
+  },
+  "zapdos": {
+    "height": 1.45,
+    "flyHeight": 1.75,
+    "attackStyle": "cast",
+    "attackDuration": 0.55,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 4708
+  },
+  "zubat": {
+    "height": 0.75,
+    "flyHeight": 1.45,
+    "attackStyle": "bite",
+    "attackDuration": 0.4,
+    "clips": [
+      "idle",
+      "walk",
+      "attack",
+      "faint"
+    ],
+    "triangles": 4232
+  }
+}
