@@ -5,6 +5,8 @@ import { BattleView, type BarInfo } from '../three/battle.js';
 import { cardEl, setCard } from './cards.js';
 import { h, icon } from './dom.js';
 import { avatar } from './home.js';
+import { sound } from '../audio/sound.js';
+import { soundToggle } from './soundToggle.js';
 
 const ERROR_TEXT: Record<ErrorMessage['error'], string> = {
   'not-enough-elixir': 'Not enough elixir!',
@@ -58,6 +60,8 @@ export class BattleHud {
   private lastCount = -1;
   private wasDouble = false;
   private crowns = { mine: 0, foe: 0 };
+  private readonly mute = soundToggle();
+  private lastTick = -1;
   private ended = false;
   private toastTimer = 0;
   private readonly unsubs: Array<() => void> = [];
@@ -68,7 +72,7 @@ export class BattleHud {
       h('div', { class: 'battle-stage' }, this.stageHost, this.barsLayer, this.textLayer, this.center),
       h('div', { class: 'hud-top' },
         h('div', { class: 'foe-plate' }, avatar('blue'), h('div', {}, this.foeName, h('div', { class: 'foe-line' }, this.foeCrowns, this.foeTag))),
-        this.timerBox,
+        h('div', { class: 'hud-right' }, this.timerBox, this.mute.el),
       ),
       h('div', { class: 'mine-crowns' }, this.myCrowns),
       this.statusBanner,
@@ -84,6 +88,7 @@ export class BattleHud {
       onBars: (bars) => this.updateBars(bars),
       onText: (text, x, y, tone) => this.floatText(text, x, y, tone),
     });
+    this.unsubs.push(this.mute.dispose);
     this.unsubs.push(session.on('hand', (m) => this.setHand(m)));
     this.unsubs.push(session.on('error', (m) => {
       this.inFlight.shift();
@@ -132,6 +137,7 @@ export class BattleHud {
   }
 
   private setHand(m: HandMessage) {
+    sound.prefetchCries([...m.hand, m.next].map((id) => CARDS[id].dex));
     this.inFlight.shift();
     const prev = this.hand;
     this.hand = m;
@@ -242,6 +248,7 @@ export class BattleHud {
   }
 
   private select(i: number) {
+    if (this.selected !== i) sound.play('select');
     this.selected = i;
     this.cards.forEach((c, j) => c.classList.toggle('selected', j === i));
     this.view.showZone(this.hand?.hand[i] ?? null);
@@ -288,11 +295,18 @@ export class BattleHud {
       if (n !== this.lastCount) {
         this.lastCount = n;
         this.announce(String(n), 'big');
+        sound.play('count');
       }
     }
     if (s.phase !== this.lastPhase) {
-      if (this.lastPhase === 'countdown' && s.phase === 'regular') this.announce('Fight!', 'big fight');
-      if (s.phase === 'overtime') this.announce('Overtime!', 'ribbon overtime');
+      if (this.lastPhase === 'countdown' && s.phase === 'regular') {
+        this.announce('Fight!', 'big fight');
+        sound.play('fight');
+      }
+      if (s.phase === 'overtime') {
+        this.announce('Overtime!', 'ribbon overtime');
+        sound.play('alert');
+      }
       if (s.phase === 'ended' && !this.ended) {
         this.ended = true;
         this.deselect();
@@ -300,20 +314,34 @@ export class BattleHud {
       }
       this.lastPhase = s.phase;
     }
-    if (s.doubleElixir && !this.wasDouble && s.phase === 'regular') this.announce('2× Elixir!', 'ribbon');
+    if (s.doubleElixir && !this.wasDouble && s.phase === 'regular') {
+      this.announce('2× Elixir!', 'ribbon');
+      sound.play('alert');
+    }
+    // The last ten seconds tick.
+    if ((s.phase === 'regular' || s.phase === 'overtime') && t <= 10 && t > 0 && t !== this.lastTick) {
+      this.lastTick = t;
+      sound.play('tick');
+    }
     this.wasDouble = s.doubleElixir;
 
     // Names and crowns.
     s.players.forEach((p) => {
       if (p.team === this.team) {
-        if (p.crowns !== this.crowns.mine) this.renderCrowns(this.myCrowns, (this.crowns.mine = p.crowns), 'mine', true);
+        if (p.crowns !== this.crowns.mine) {
+          this.renderCrowns(this.myCrowns, (this.crowns.mine = p.crowns), 'mine', true);
+          sound.play('crown', { volume: 1 });
+        }
       } else {
         if (this.foeName.textContent !== p.name) {
           this.foeName.textContent = p.name;
           // Bots are named "… (bot)"; guests have no trophies to show.
           this.foeTag.replaceChildren(...(p.profileId ? [icon(Trophy), String(p.trophies)] : []));
         }
-        if (p.crowns !== this.crowns.foe) this.renderCrowns(this.foeCrowns, (this.crowns.foe = p.crowns), 'enemy', true);
+        if (p.crowns !== this.crowns.foe) {
+          this.renderCrowns(this.foeCrowns, (this.crowns.foe = p.crowns), 'enemy', true);
+          sound.play('crown', { volume: 0.6 });
+        }
       }
     });
 
@@ -348,6 +376,7 @@ export class BattleHud {
   }
 
   private toast(text: string) {
+    sound.play('denied');
     this.notify(text);
   }
 

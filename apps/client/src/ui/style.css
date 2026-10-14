@@ -81,6 +81,16 @@ h1, h2 { margin: 0; }
 .muted { color: var(--muted); }
 .btn-icon { width: 1em; height: 1em; vertical-align: -0.12em; stroke-width: 2.6; }
 
+/* Sound on/off. */
+.sound-toggle { width: 36px; height: 36px; flex: none; display: grid; place-items: center; padding: 0; border: 2px solid var(--ink); background: var(--card); box-shadow: var(--shadow); cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
+.sound-toggle:hover { background: var(--accent); }
+.sound-toggle:active { transform: translate(3px, 3px); box-shadow: none; }
+.sound-toggle[aria-pressed='false'] { background: var(--muted-bg); }
+.sound-toggle svg { width: 20px; height: 20px; stroke-width: 2; }
+.hud-right { display: flex; align-items: flex-start; gap: 6px; }
+.hud-right .sound-toggle { pointer-events: auto; width: 32px; height: 32px; }
+.hud-right .sound-toggle svg { width: 18px; height: 18px; }
+
 /* Trophy counts and trophy changes. */
 .trophies { display: inline-flex; align-items: center; gap: 4px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 3px 10px 3px 6px; font-family: var(--head); font-size: 16px; white-space: nowrap; flex: none; }
 .trophies svg { width: 18px; height: 18px; stroke: var(--ink); stroke-width: 2; fill: var(--primary); flex: none; }

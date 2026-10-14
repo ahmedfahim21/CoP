@@ -132,6 +132,10 @@ pnpm models pikachu gengar  # rebuild only these
 
 The client blends the baked clips from the same `Pose` the battle always drove (stride phase, attack/hit/faint progress), with procedural squash, rage tremble and glowing parts on top. `gallery.html` shows every model side by side with mode buttons (idle, walk, attack, special, faint); `sandbox.html` runs a local simulation for animation work. Speciality visuals live in `views.ts` and `battle.ts`.
 
+### Sound
+
+`src/audio/`: every effect is original 8-bit synthesis in WebAudio (`synth.ts`: square/triangle voices and Game Boy–style stepped noise), with a move sound per type, hit sounds by effectiveness, faint, explosions, tower collapses, heal, paralysis, evolution, countdown, crowns, the last-ten-seconds tick and short victory/defeat jingles. Pokémon cries (Gen I) stream at runtime from the [PokeAPI cries](https://github.com/PokeAPI/cries) repo when a Pokémon is deployed, evolves or its card is opened; nothing is committed. A voice limiter (`limiter.ts`) caps simultaneous sounds and drops rapid repeats, sounds pan by screen position, and the speaker button mutes everything (remembered per browser). Audio starts on the title screen's tap, as browsers require.
+
 ### Card details
 
 `packages/shared/src/cardInfo.ts` derives what the card screen shows from the simulation's own numbers: roles, DPS, a trait line per ability, type matchups (only types that exist in the game) and multipliers against each starter tower. The loading screen's tips come from the same place.

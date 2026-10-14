@@ -5,10 +5,17 @@ import { bootModels } from './ui/boot.js';
 import { Home } from './ui/home.js';
 import { BattleHud } from './ui/hud.js';
 import { ResultScreen, matchmakingOverlay } from './ui/overlays.js';
+import { sound } from './audio/sound.js';
 
 type Mode = 'ranked' | 'training' | 'create' | { code: string };
 
 await bootModels({ splash: true });
+
+// Menu taps click; cards in the battle hand have their own select sound.
+document.addEventListener('pointerdown', (e) => {
+  const el = (e.target as Element).closest('button, .card');
+  if (el && !el.closest('.hand')) sound.play('tap');
+});
 
 const prefs = loadPrefs();
 const profiles = new ProfileSession(prefs);

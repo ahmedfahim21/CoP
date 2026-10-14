@@ -3,6 +3,7 @@ import type { BattleStats, MatchMode, QueueStatusMessage, RematchStateMessage, S
 import { h, icon } from './dom.js';
 import { avatar } from './home.js';
 import { deltaPill } from './ladder.js';
+import { sound } from '../audio/sound.js';
 
 export interface MatchmakingOverlay {
   el: HTMLDivElement;
@@ -97,6 +98,7 @@ export class ResultScreen {
   private asked = false;
 
   constructor(private readonly r: ResultInfo) {
+    sound.play(r.winner === 'me' ? 'victory' : r.winner === 'foe' ? 'defeat' : 'draw');
     const side = (who: 'me' | 'foe') => {
       const crowns = who === 'me' ? r.myCrowns : r.foeCrowns;
       return h('div', { class: `result-side ${who}` },
