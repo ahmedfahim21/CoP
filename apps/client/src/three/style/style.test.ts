@@ -5,10 +5,12 @@ import { gradientMap, litMat, shadowTint, toToon } from './toon.js';
 
 /** Runs a material's onBeforeCompile against the real toon fragment shader source. */
 function compiled(mat: THREE.Material) {
+  const toon = THREE.ShaderLib.toon;
+  if (!toon) throw new Error('three has no toon shader');
   const shader = {
     uniforms: {} as Record<string, { value: unknown }>,
-    fragmentShader: THREE.ShaderLib.toon.fragmentShader,
-    vertexShader: THREE.ShaderLib.toon.vertexShader,
+    fragmentShader: toon.fragmentShader,
+    vertexShader: toon.vertexShader,
   };
   mat.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, {} as THREE.WebGLRenderer);
   return shader;

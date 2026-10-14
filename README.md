@@ -141,6 +141,8 @@ Rendering is cel-shaded with clean ink outlines, after the sister project sadak 
 - `toon.ts`: every lit surface is a `MeshToonMaterial` with a 2–4 band ramp, patched so shadow bands lean cool instead of just darker. Use `litMat()` wherever you'd reach for `MeshStandardMaterial`; character glTF materials go through `toToon()`.
 - `gba.ts`: the scene renders at one virtual pixel per CSS pixel; one full-screen pass adds outlines from a second difference of reciprocal depth (flat ground never inks, silhouettes always do), a soft highlight shoulder, split tone and saturation, then a reduced palette with a fine ordered dither.
 
+Attacks look like their moves (`three/moves.ts`): Water Gun and Hydro Pump are translucent, wobbling jets with foam rushing down them and spray; Thunderbolt and Thunder Shock trail waving, crackling electric strands, and instant lightning (Magneton, Zapdos' chain) arcs straight between targets; Ember is a flickering fireball; Ice Beam a frosty beam; Psybeam travelling colour rings; Swift spinning stars; Rollout a bowling boulder. Glowing parts never write depth, so the outline pass inks solid things and leaves light alone. `sandbox.html?scene=moves&zoom=2.2` shows them all at close range.
+
 The ramps, shadow-tint patch, ink and split tone are adapted from [sakura-crossing](https://github.com/Kenton-GMI/sakura-crossing) (MIT, © 2026 Kenton Wang) via sadak.
 
 ### Sound

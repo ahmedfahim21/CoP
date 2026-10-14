@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { moveVisual, type MoveLook, type MoveVisual } from './moves.js';
 import { litMat } from './style/toon.js';
 import { ARENA_W, BRIDGE_XS, CARDS, FORMS, STARTERS, statsOf, unitStats, type Ability, type Entity, type StarterId, type Team, type UnitId } from '@cop/shared';
 import { toScene, dampAngle } from './coords.js';
@@ -470,84 +471,45 @@ export class TowerView {
 
 // --- Projectiles -------------------------------------------------------------
 
-export type MoveType = 'fire' | 'water' | 'electric' | 'grass' | 'ice' | 'normal' | 'other';
-
-export function moveTypeOf(defId: string): MoveType {
-  const kind = defId === 'trainer' ? 'king' : defId in CARDS || defId in FORMS ? 'unit' : defId in STARTERS ? 'princess' : null;
-  if (!kind) return 'other';
-  const t = statsOf({ kind, defId: defId as UnitId | StarterId | 'trainer' }).move.type;
-  const known: readonly string[] = ['fire', 'water', 'electric', 'grass', 'ice', 'normal'];
-  return known.includes(t) ? (t as MoveType) : 'other';
+/** How a source's move looks in flight (moves.ts). */
+export function moveLookOf(defId: string): MoveLook {
+  if (defId === 'trainer') return 'pokeball';
+  const kind = defId in CARDS || defId in FORMS ? 'unit' : defId in STARTERS ? 'princess' : null;
+  if (!kind) return 'plain';
+  const move = statsOf({ kind, defId: defId as UnitId | StarterId }).move;
+  if (move.name === 'Swift') return 'stars';
+  switch (move.type) {
+    case 'water': return 'water';
+    case 'electric': return 'electric';
+    case 'fire': return 'fire';
+    case 'grass': return 'grass';
+    case 'ice': return 'ice';
+    case 'psychic': return 'psychic';
+    case 'rock': case 'ground': return 'boulder';
+    default: return 'plain';
+  }
 }
 
-const projGeo = {
-  sphere: new THREE.SphereGeometry(1, 14, 10),
-  crystal: new THREE.OctahedronGeometry(1, 0),
-  leaf: (() => {
-    const s = new THREE.Shape();
-    s.moveTo(0, -0.5);
-    s.quadraticCurveTo(0.45, 0, 0, 0.5);
-    s.quadraticCurveTo(-0.45, 0, 0, -0.5);
-    return new THREE.ShapeGeometry(s);
-  })(),
-  dome: new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-};
-
 export class ProjectileView {
+  /** Root: holds the head (moved and aimed each frame) and world-space extras. */
   readonly group = new THREE.Group();
   readonly buffer = new SnapshotBuffer();
+  readonly look: MoveLook;
+  private readonly visual: MoveVisual;
   private readonly startY: number;
   private readonly startOffset: THREE.Vector3;
+  private readonly origin = new THREE.Vector3();
   private startDist = -1;
-  private spin = 0;
-  readonly type: MoveType;
+  private placed = false;
   lastPos = new THREE.Vector3();
 
   constructor(readonly id: string, readonly targetId: string, sourceDefId: string, muzzle: THREE.Vector3 | null, serverPos: THREE.Vector3) {
-    this.type = moveTypeOf(sourceDefId);
+    this.look = moveLookOf(sourceDefId);
+    this.visual = moveVisual(this.look, sourceDefId === 'gyarados');
+    this.group.add(this.visual.head, this.visual.span);
     this.startY = muzzle?.y ?? 1;
     this.startOffset = muzzle ? new THREE.Vector3(muzzle.x - serverPos.x, 0, muzzle.z - serverPos.z) : new THREE.Vector3();
-    const glowMat = (c: number) => new THREE.MeshBasicMaterial({ color: c, toneMapped: false });
-    switch (this.type) {
-      case 'fire': {
-        this.group.add(mesh(projGeo.sphere, glowMat(0xffd24a), 0.16), mesh(projGeo.sphere, new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.6, toneMapped: false }), 0.26));
-        break;
-      }
-      case 'water': {
-        const m = mesh(projGeo.sphere, litMat({ color: 0x5ab8f5, roughness: 0.1, emissive: 0x1b5f9a }), 0.15);
-        m.scale.set(0.15, 0.15, 0.32);
-        this.group.add(m);
-        break;
-      }
-      case 'electric':
-        this.group.add(mesh(projGeo.sphere, glowMat(0xfff7b0), 0.13), mesh(projGeo.sphere, new THREE.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.55, toneMapped: false }), 0.24));
-        break;
-      case 'grass':
-        for (let i = 0; i < 3; i++) {
-          const leaf = new THREE.Mesh(projGeo.leaf, litMat({ color: 0x5ab44a, side: THREE.DoubleSide, roughness: 0.6 }));
-          leaf.scale.setScalar(0.32);
-          leaf.position.set(Math.cos((i / 3) * Math.PI * 2) * 0.16, Math.sin((i / 3) * Math.PI * 2) * 0.16, 0);
-          leaf.castShadow = true;
-          this.group.add(leaf);
-        }
-        break;
-      case 'ice': {
-        const c = mesh(projGeo.crystal, litMat({ color: 0xc8f4ff, roughness: 0.15, metalness: 0.1, emissive: 0x4fc3e8, emissiveIntensity: 0.6 }), 0.17);
-        c.scale.set(0.12, 0.12, 0.26);
-        this.group.add(c);
-        break;
-      }
-      case 'normal': {
-        // Poké Ball.
-        const top = mesh(projGeo.dome, litMat({ color: 0xe5483f, roughness: 0.3 }), 0.13);
-        const bottom = mesh(projGeo.dome, litMat({ color: 0xf3f1ea, roughness: 0.3 }), 0.13);
-        bottom.rotation.x = Math.PI;
-        this.group.add(top, bottom);
-        break;
-      }
-      default:
-        this.group.add(mesh(projGeo.sphere, glowMat(0xffffff), 0.14));
-    }
+    this.origin.set(serverPos.x + this.startOffset.x, this.startY, serverPos.z + this.startOffset.z);
   }
 
   update(ctx: FrameCtx) {
@@ -565,53 +527,28 @@ export class ProjectileView {
     }
     // Leave from the muzzle, converge on the server path, and drop to the target's height.
     flat.addScaledVector(this.startOffset, 1 - progress);
-    const arc = this.type === 'normal' ? Math.sin(progress * Math.PI) * 1.4 : this.type === 'grass' ? Math.sin(progress * Math.PI) * 0.4 : 0;
-    flat.y = this.startY + (targetY - this.startY) * progress + arc;
-    const dir = flat.clone().sub(this.group.position);
-    this.group.position.copy(flat);
-    if (dir.lengthSq() > 1e-6) this.group.lookAt(flat.clone().add(dir));
-    this.spin += ctx.dt * (this.type === 'grass' ? 18 : this.type === 'normal' ? 14 : 6);
-    if (this.type === 'grass' || this.type === 'ice') this.group.rotateZ(this.spin);
-    if (this.type === 'normal') this.group.rotateX(this.spin);
+    const arc = this.look === 'pokeball' ? Math.sin(progress * Math.PI) * 1.4 : this.look === 'grass' ? Math.sin(progress * Math.PI) * 0.4 : 0;
+    flat.y = this.look === 'boulder'
+      // Rollout drops from the hands to the ground and bowls along it.
+      ? Math.max(0.42, this.startY * (1 - Math.min(1, progress * 4)))
+      : this.startY + (targetY - this.startY) * progress + arc;
+    const head = this.visual.head;
+    const dir = flat.clone().sub(this.placed ? head.position : this.origin);
+    head.position.copy(flat);
+    // Aim along the flight; visuals spin their own children, never the head.
+    if (dir.lengthSq() > 1e-6) head.lookAt(flat.clone().add(dir));
+    this.placed = true;
     this.lastPos.copy(flat);
-    // Trails.
-    const fx = ctx.fx;
-    if (this.type === 'fire') {
-      fx.mote(flat, 0xff8a2a, 0.45, 0.25);
-      if (Math.random() < 0.4) fx.mote(flat, 0xffd24a, 0.25, 0.4);
-    } else if (this.type === 'electric') {
-      fx.mote(flat, 0xfff07a, 0.35, 0.15);
-      if (Math.random() < 0.5) fx.sparks(flat, 0xfff07a, 1, 1.5);
-    } else if (this.type === 'water') {
-      fx.mote(flat, 0x8fd4ff, 0.25, 0.25);
-    } else if (this.type === 'ice') {
-      fx.mote(flat, 0xd8f8ff, 0.3, 0.3);
-    }
+    this.visual.update({ origin: this.origin, head: flat, progress, dt: ctx.dt, t: ctx.t, fx: ctx.fx });
   }
 
   impact(fx: Fx) {
-    const at = this.lastPos;
-    switch (this.type) {
-      case 'fire': fx.fireBurst(at, 0.8); break;
-      case 'water': fx.splash(at); break;
-      case 'electric': fx.electric(at); break;
-      case 'grass': fx.leaves(at); break;
-      case 'ice': fx.frost(at); break;
-      default: fx.sparks(at, 0xffffff, 10, 2.5); fx.smoke(at, 3, 0xf0ece4);
-    }
+    this.visual.impact(fx, this.lastPos);
   }
 
   dispose() {
-    this.group.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) (m.material as THREE.Material).dispose();
-    });
+    this.visual.dispose();
     this.group.removeFromParent();
   }
 }
 
-function mesh(g: THREE.BufferGeometry, m: THREE.Material, s: number): THREE.Mesh {
-  const out = new THREE.Mesh(g, m);
-  out.scale.setScalar(s);
-  return out;
-}

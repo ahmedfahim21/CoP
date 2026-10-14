@@ -34,6 +34,7 @@ export interface BattleSource {
 import { buildArena, type Arena } from './arena.js';
 import { toScene } from './coords.js';
 import { Fx } from './fx.js';
+import { flashArc } from './moves.js';
 import { INTERP_DELAY_MS } from './interp.js';
 import { teamColor } from './palette.js';
 import { buildRig } from './rigs/registry.js';
@@ -88,11 +89,11 @@ export class BattleView {
   private readonly lastText = new Map<string, number>();
   private readonly unsubs: Array<() => void> = [];
 
-  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks) {
+  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks, zoom?: number) {
     const team = session.team;
     if (team === undefined) throw new Error('BattleView created before the player has a team');
     this.team = team;
-    this.stage = new Stage(host, { team, framing: 'battle', shadows: true });
+    this.stage = new Stage(host, { team, framing: 'battle', shadows: true, zoom });
     this.arena = buildArena();
     this.stage.scene.add(this.arena.group, this.fx.group);
 
@@ -344,6 +345,12 @@ export class BattleView {
         if (u) {
           u.attack(ev.targetId);
           this.attackFx(u.rig.attackStyle, u.muzzleWorld(), ev.targetId, u.defId, u.id);
+          // Instant ranged lightning (Magneton) has no projectile: arc straight to the target.
+          const stats = statsOf({ kind: 'unit', defId: u.defId });
+          const target = this.positionOf(ev.targetId);
+          if (target && stats.move.type === 'electric' && stats.projectileSpeed === 0 && stats.range >= 2 && stats.ability?.kind !== 'chain') {
+            flashArc(this.fx, u.muzzleWorld(), target, 0.2, 0.9);
+          }
         }
         if (t) {
           t.attack(ev.targetId);
@@ -411,6 +418,18 @@ export class BattleView {
       case 'evolve': {
         const at = this.positionOf(ev.id);
         if (at) this.flavourText(ev.id, at, `What? ${unitName(ev.from)} is evolving!`, 'special', true);
+        break;
+      }
+      case 'chain': {
+        // Zapdos' Thunder: one arc from the caster, then a hop to each next target.
+        const caster = this.units.get(ev.path[0]!);
+        let from = caster ? caster.muzzleWorld() : this.positionOf(ev.path[0]!);
+        for (const id of ev.path.slice(1)) {
+          const to = this.positionOf(id);
+          if (!from || !to) break;
+          flashArc(this.fx, from, to, 0.3, 1.1);
+          from = to;
+        }
         break;
       }
       case 'spawn': {

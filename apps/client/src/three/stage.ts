@@ -9,6 +9,8 @@ export interface StageOptions {
   /** 'battle' frames the whole arena for play; 'diorama' is the menu's angled showcase. */
   framing: 'battle' | 'diorama';
   shadows: boolean;
+  /** Dev tools only: move the battle camera in by this factor. */
+  zoom?: number;
 }
 
 type FrameFn = (dt: number, t: number) => void;
@@ -156,7 +158,7 @@ export class Stage {
     const needW = 19.6 / (2 * Math.tan(vFov / 2) * cam.aspect);
     // Depth budget includes headroom for the far king tower and the HUD strip over it.
     const needH = (37 * Math.sin(pitch)) / (2 * Math.tan(vFov / 2)) + 3;
-    const dist = Math.max(needW, needH);
+    const dist = Math.max(needW, needH) / (this.opts.zoom ?? 1);
     const look = new THREE.Vector3(0, 0, side * 0.2);
     cam.position.set(0, look.y + Math.sin(pitch) * dist, look.z + side * Math.cos(pitch) * dist);
     cam.lookAt(look);
