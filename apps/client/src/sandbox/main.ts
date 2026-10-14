@@ -2,6 +2,7 @@
 // so each speciality can be watched (and tuned) in isolation. Dev tool: open /sandbox.html.
 import { REGULAR_SECONDS, createMatch, isCharging, step, type GameEvent, type MatchState, type Team } from '@cop/shared';
 import { BattleView, type BattleSource, type EntityLike, type ProjectileLike } from '../three/battle.js';
+import { bootModels } from '../ui/boot.js';
 import { h } from '../ui/dom.js';
 import { SCENARIOS, type Scenario } from './scenarios.js';
 
@@ -107,6 +108,7 @@ function renderBar() {
   );
 }
 
+await bootModels();
 const params = new URLSearchParams(location.search);
 const initial = SCENARIOS.find((s) => s.id === params.get('scene')) ?? SCENARIOS[0]!;
 run(initial, params.get('side') === '1' ? 1 : initial.view);

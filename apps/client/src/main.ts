@@ -1,11 +1,14 @@
 import { loadPrefs } from './prefs.js';
 import { ProfileSession } from './profile.js';
 import { createPrivate, joinByCode, rankedSearch, takeSeat, training, type Loadout, type Search, type Session } from './net.js';
+import { bootModels } from './ui/boot.js';
 import { Home } from './ui/home.js';
 import { BattleHud } from './ui/hud.js';
 import { ResultScreen, matchmakingOverlay } from './ui/overlays.js';
 
 type Mode = 'ranked' | 'training' | 'create' | { code: string };
+
+await bootModels();
 
 const prefs = loadPrefs();
 const profiles = new ProfileSession(prefs);
