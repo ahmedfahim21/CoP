@@ -186,6 +186,8 @@ h1, h2 { margin: 0; }
 .ladder-me { position: sticky; bottom: 0; margin-top: auto; padding-top: 8px; }
 .ladder-me .ladder-row { cursor: default; box-shadow: var(--shadow-lg); }
 
+.profile-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.profile-tag { font-family: var(--head); font-size: 14px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); padding: 1px 8px 2px; user-select: all; }
 .profile-card { display: flex; align-items: center; gap: 12px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 10px; }
 .profile-card .avatar { width: 56px; height: 56px; }
 .profile-card-text { flex: 1; min-width: 0; }
