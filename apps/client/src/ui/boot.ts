@@ -100,7 +100,12 @@ export async function bootModels({ splash = false } = {}): Promise<void> {
   const leave = () => {
     window.clearInterval(tipTimer);
     el.classList.add('leaving');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
+    // Removed when the slide-out ends, or shortly after if no animation runs (reduced
+    // motion, background tab), so the overlay can never be left covering the game.
+    el.addEventListener('animationend', (e) => {
+      if (e.target === el) el.remove();
+    });
+    window.setTimeout(() => el.remove(), 900);
   };
   if (!splash) {
     window.addEventListener('pointerdown', () => sound.unlock(), { once: true });

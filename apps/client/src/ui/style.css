@@ -506,7 +506,7 @@ h1, h2 { margin: 0; }
 }
 
 /* --- Boot: loading, then the title screen ------------------------------- */
-.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--primary); }
+.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--primary); container-type: inline-size; }
 .boot-rays {
   position: absolute; left: 50%; top: 34%; width: 260vmax; height: 260vmax; translate: -50% -50%;
   background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.32) 0deg 9deg, transparent 9deg 18deg);
@@ -514,11 +514,11 @@ h1, h2 { margin: 0; }
 }
 .boot::after { content: ''; position: absolute; inset: 0; background: radial-gradient(rgba(0,0,0,0.16) 1.2px, transparent 1.5px) 0 0 / 16px 16px; pointer-events: none; }
 @keyframes rays { to { rotate: 360deg; } }
-.boot-stage { position: relative; z-index: 1; width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.boot-stage { position: relative; z-index: 1; width: min(420px, 100%); min-width: 0; max-height: 100%; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 
 .boot-logo { display: flex; flex-direction: column; align-items: center; line-height: 0.92; rotate: -4deg; animation: logo-in 700ms cubic-bezier(.2,1.5,.4,1) both; }
 .boot-logo span { font-family: var(--head); text-transform: uppercase; letter-spacing: 0.01em; }
-.boot-logo-top, .boot-logo-bottom { font-size: clamp(40px, 13vw, 64px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--ink); }
+.boot-logo-top, .boot-logo-bottom { font-size: clamp(30px, 14cqi, 64px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--ink); }
 .boot-logo-top { color: var(--destructive); }
 .boot-logo-of { font-size: 18px; background: var(--ink); color: var(--primary); padding: 2px 10px 4px; margin: 4px 0 6px; rotate: 4deg; }
 @keyframes logo-in { from { scale: 2.2; opacity: 0; rotate: -14deg; } }
