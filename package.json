@@ -10,7 +10,8 @@
     "test": "pnpm -r test",
     "models": "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup --python tools/blender/build.py -- apps/client/public/models",
     "brand": "node tools/brand/render.mjs",
-    "smoke": "pnpm --filter @cop/server smoke"
+    "smoke": "pnpm --filter @cop/server smoke",
+    "screenshots": "node tools/brand/screens.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
