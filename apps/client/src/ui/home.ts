@@ -9,6 +9,7 @@ import { h, icon } from './dom.js';
 import { ProfilePanel, RanksPanel, trophyPill } from './ladder.js';
 import { sound } from '../audio/sound.js';
 import { soundToggle } from './soundToggle.js';
+import { showCredits } from './credits.js';
 
 export type Tab = 'cards' | 'towers' | 'battle' | 'ranks' | 'profile';
 
@@ -245,7 +246,9 @@ export class Home {
         render();
       });
       const parts: Array<HTMLElement | null> = [
-        h('div', { class: 'deck-head' }, h('h2', { textContent: 'Battle Deck' }), h('div', { class: 'avg stroke' }, dropEl(avg.toFixed(1)), 'Avg. elixir')),
+        h('div', { class: 'deck-head' },
+          h('div', { class: 'deck-title' }, h('h2', { textContent: 'Battle Deck' }), creditsButton()),
+          h('div', { class: 'avg stroke' }, dropEl(avg.toFixed(1)), 'Avg. elixir')),
         pending
           ? h('div', { class: 'swap-banner' }, cardEl(pending), h('div', { class: 'stroke', textContent: `Tap a card in your deck to swap in ${CARDS[pending].name}` }), cancel)
           : null,
@@ -415,3 +418,10 @@ function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null)
 
 /** Good for this card above 1, bad below. */
 const tone = (m: number) => (m > 1 ? 'good' : m < 1 ? 'bad' : 'plain');
+
+/** The ⓘ beside the deck title: opens the credits. */
+function creditsButton(): HTMLButtonElement {
+  const b = h('button', { class: 'info-btn', attrs: { 'aria-label': 'Credits' } }, icon(Info));
+  b.addEventListener('click', showCredits);
+  return b;
+}
