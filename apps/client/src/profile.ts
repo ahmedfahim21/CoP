@@ -1,4 +1,4 @@
-import { parseCredential, type MatchRecord, type OwnProfile, type OwnProfileResponse } from '@cop/shared';
+import { parseCredential, sanitizeTrainerName, type MatchRecord, type OwnProfile, type OwnProfileResponse } from '@cop/shared';
 import { ApiError, api } from './api.js';
 import { savePrefs, type Prefs } from './prefs.js';
 
@@ -23,6 +23,8 @@ export class ProfileSession {
   private readonly listeners = new Set<() => void>();
   private syncTimer = 0;
   private loading: Promise<void> | null = null;
+  /** A name just chosen here that the server may not have yet. */
+  private chosenName: string | null = null;
 
   constructor(private readonly prefs: Prefs) {}
 
@@ -54,6 +56,22 @@ export class ProfileSession {
     } catch (err) {
       console.warn('Refreshing the profile failed', err);
     }
+  }
+
+  /**
+   * Set the trainer's name, chosen on this device, and sync it. If the profile hasn't loaded
+   * yet, the choice wins over the server's copy when it does.
+   */
+  chooseName(raw: string) {
+    this.prefs.name = sanitizeTrainerName(raw);
+    this.prefs.named = true;
+    if (this.status === 'ready') {
+      this.saveLoadout();
+      return;
+    }
+    // Not loaded yet: keep it locally; creating or loading the profile settles it with the server.
+    this.chosenName = this.prefs.name;
+    savePrefs(this.prefs);
   }
 
   /** Push the local loadout (name, deck, towers) to the server, debounced. */
@@ -116,10 +134,16 @@ export class ProfileSession {
     this.status = 'ready';
     this.problem = null;
     if (adoptLoadout) {
-      this.prefs.name = res.profile.name;
+      this.prefs.name = this.chosenName ?? res.profile.name;
       this.prefs.deck = [...res.profile.deck];
       this.prefs.starters = res.profile.starters;
       savePrefs(this.prefs);
+    }
+    // A name chosen before the profile loaded: send it now if the server still has the old one.
+    if (this.chosenName !== null) {
+      const stale = res.profile.name !== this.chosenName;
+      this.chosenName = null;
+      if (stale) this.saveLoadout();
     }
     this.emit();
   }
