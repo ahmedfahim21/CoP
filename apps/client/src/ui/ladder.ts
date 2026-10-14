@@ -199,7 +199,10 @@ export class ProfilePanel {
       return;
     }
     const parts: Array<HTMLElement | null> = [
-      profileHeader(profile, 'red'),
+      // Name, portrait, rank and trophies are already in the top bar; only the tag is new here.
+      h('div', { class: 'profile-heading' },
+        h('h2', { textContent: 'Trainer Profile' }),
+        h('div', { class: 'profile-tag', textContent: `#${profile.id}` })),
       arenaProgress(profile.trophies),
       profile.streak >= 2 ? h('div', { class: 'streak stroke' }, icon(Flame), `${profile.streak} win streak!`) : null,
       statGrid(profile),
