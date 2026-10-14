@@ -1,4 +1,5 @@
 import { inject } from '@vercel/analytics';
+import { weakestTower, type Team } from '@cop/shared';
 import { loadPrefs } from './prefs.js';
 import { ProfileSession } from './profile.js';
 import { createPrivate, joinByCode, rankedSearch, takeSeat, training, type Loadout, type Search, type Session } from './net.js';
@@ -187,6 +188,9 @@ function showResult(s: Session) {
     myCrowns,
     foeCrowns,
     reason: st.resultReason,
+    towerHealth: st.resultReason === 'tiebreak'
+      ? { mine: weakestTower(st.entities.values(), me), foe: weakestTower(st.entities.values(), (1 - me) as Team) }
+      : null,
     // A finished room can't be replayed: ranked queues again, everything else asks for a fresh room.
     onAgain: () => (ranked ? void leave().then(() => connect('ranked')) : s.requestRematch()),
     onMenu: () => backToMenu(),
