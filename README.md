@@ -4,7 +4,7 @@ A Clash Royale–style 1v1 browser game in 3D. Your king tower is a trainer, you
 
 ## Run it
 
-Requires Node 22.13+ (for the built-in `node:sqlite`) and pnpm 10.
+Requires Node 22+, pnpm 10 and a Supabase project (see [Database](#database)).
 
 ```bash
 pnpm install
@@ -12,9 +12,25 @@ pnpm dev
 ```
 
 - Game: http://localhost:5173 (game server on :2567)
-- Profiles, trophies and match history are stored in SQLite at `apps/server/data/cop.sqlite`; set `COP_DB` to put it elsewhere. Delete the file to reset the ladder.
+- No sign-up: the first visit creates a trainer profile and keeps its credential in the browser's localStorage. **Profile → restore code** moves it to another browser or device.
 - To play ranked against yourself, use two browser profiles (or one normal and one private window): each gets its own trainer profile. Two tabs of the same profile can still be matched, but the battle is unrated. **Create room** gives a friendly invite link.
 - Phones on the same network can join via the "Network" URL Vite prints. The client talks to `<page host>:2567`; set `VITE_SERVER_URL` to point it elsewhere.
+
+## Database
+
+Profiles, trophies and match history live in Supabase. Only the game server touches them, through the `cop_*` SQL functions in `supabase/migrations/`. Row-level security is on and those functions are granted to `service_role` only, so the publishable key can read nothing.
+
+1. Apply the migration: paste `supabase/migrations/20261014120000_profiles.sql` into the Supabase SQL editor, or run `supabase db push` with the CLI linked to your project.
+2. Add the server's settings to the root `.env` (gitignored), from Project Settings → API Keys:
+
+   ```
+   SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_SECRET_KEY=sb_secret_...
+   ```
+
+   The secret key stays on the server; the client never sees it. The server refuses to start without both.
+
+Tests don't need Supabase: they apply the same migration to an in-memory Postgres (PGlite).
 
 ## Test
 
@@ -89,7 +105,7 @@ apps/server       Colyseus rooms and HTTP API.
   BattleRoom        20 Hz authoritative tick, private hands, 20s reconnect window, modes
                     (ranked / friendly / training / casual), bot seat, result recording, rematch
   QueueRoom         ranked queue; pairing rules in matchmaking.ts
-  store.ts          SQLite profiles, ladder and match history (node:sqlite)
+  store.ts          profiles, ladder and match history (Supabase RPC; db.ts is the client)
   api.ts            /api/profiles, /api/profiles/me, /api/profiles/:tag, /api/leaderboard
   sprites.ts        /sprites/trainer/:name proxy
 apps/client       Vite + three.js battle, DOM menus and HUD.
