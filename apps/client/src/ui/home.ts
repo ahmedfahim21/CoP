@@ -7,6 +7,8 @@ import { trainerSpriteUrl } from '../config.js';
 import { cardEl, dropEl, starterArt } from './cards.js';
 import { h, icon } from './dom.js';
 import { ProfilePanel, RanksPanel, trophyPill } from './ladder.js';
+import { sound } from '../audio/sound.js';
+import { soundToggle } from './soundToggle.js';
 
 export type Tab = 'cards' | 'towers' | 'battle' | 'ranks' | 'profile';
 
@@ -161,6 +163,7 @@ export class Home {
     return h('header', { class: 'topbar' },
       h('div', { class: 'profile' }, avatar('red'), textCol, edit),
       trophies,
+      soundToggle().el,
     );
   }
 
@@ -348,6 +351,7 @@ function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null)
   const s = def.stats;
   const info = cardInfo(id);
   const onUse = useFor(id);
+  sound.cry(def.dex);
   const stat = (ic: IconData, k: string, v: string) => h('div', { class: 'stat' }, icon(ic), h('div', {}, h('div', { class: 'k', textContent: k }), h('div', { class: 'v stroke', textContent: v })));
   const close = h('button', { class: onUse ? 'btn' : 'btn gold' }, 'OK');
   const use = onUse ? h('button', { class: 'btn gold' }, 'Use') : null;

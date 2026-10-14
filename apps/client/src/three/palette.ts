@@ -1,25 +1,28 @@
 import * as THREE from 'three';
+import { litMat } from './style/toon.js';
 
 /** One palette for the whole arena: no pure white, shared accents, sun upper-left. */
 export const PALETTE = {
-  grassA: 0x8fd14f,
-  grassB: 0x83c645,
+  grassA: 0x86cc4c,
+  grassB: 0x6fb83e,
   grassEdge: 0x6fae3c,
   outerGrass: 0x5f9e3a,
-  path: 0xdcc58f,
-  pathEdge: 0xc8ae74,
+  path: 0xcfcabd,
+  pathEdge: 0xaaa497,
   plaza: 0xc9c3b5,
   plazaJoint: 0xaaa293,
   stone: 0xc8c1b2,
+  towerStone: 0xe7e3da,
   stoneLight: 0xded8ca,
   stoneDark: 0x8f8778,
   stoneDeep: 0x6c6558,
   wood: 0xa8703f,
   woodLight: 0xc48a52,
   woodDark: 0x7a4c27,
-  water: 0x3ea3e0,
-  waterDeep: 0x2a78b8,
-  foam: 0xd9f3ff,
+  water: 0x35d3d6,
+  waterDeep: 0x1aa5b8,
+  foam: 0xe4fffb,
+  lily: 0x4fae3a,
   roofGreen: 0x3f9a55,
   roofRed: 0xc2483a,
   gold: 0xf2c14e,
@@ -38,14 +41,14 @@ export const PALETTE = {
 export const teamColor = (mine: boolean) => (mine ? PALETTE.mine : PALETTE.enemy);
 export const teamDark = (mine: boolean) => (mine ? PALETTE.mineDark : PALETTE.enemyDark);
 
-const shared = new Map<string, THREE.MeshStandardMaterial>();
+const shared = new Map<string, THREE.MeshToonMaterial>();
 
 /** Shared material for static scenery. Never mutate one of these at runtime. */
-export function staticMat(color: number, opts: { roughness?: number; metalness?: number; emissive?: number } = {}): THREE.MeshStandardMaterial {
+export function staticMat(color: number, opts: { roughness?: number; metalness?: number; emissive?: number } = {}): THREE.MeshToonMaterial {
   const key = `${color}:${opts.roughness ?? 0.85}:${opts.metalness ?? 0}:${opts.emissive ?? 0}`;
   let m = shared.get(key);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({
+    m = litMat({
       color, roughness: opts.roughness ?? 0.85, metalness: opts.metalness ?? 0, emissive: opts.emissive ?? 0x000000,
     });
     shared.set(key, m);

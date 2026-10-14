@@ -39,6 +39,39 @@ export function quietTowers(s: MatchState) {
 
 export const SCENARIOS: Scenario[] = [
   {
+    id: 'flight', title: 'Fly over', view: 0,
+    note: 'Fliers deployed behind their own towers climb over them instead of flying through.',
+    setup(s) {
+      place(s, 0, 'charizard', { x: 3.5, y: 28.6 }, { ready: true });
+      place(s, 0, 'zubat', { x: 9, y: 31.2 }, { ready: true });
+      place(s, 0, 'articuno', { x: 14.5, y: 28.6 }, { ready: true });
+    },
+  },
+  {
+    id: 'moves', title: 'Ranged moves', view: 0,
+    note: 'Thunderbolt, Ice Beam, Swift, Psybeam and Thunder Shock across the river, while the starter towers trade Water Gun, Ember and Razor Leaf.',
+    setup(s) {
+      for (const [card, x] of [['pikachu', 3], ['lapras', 6], ['starmie', 9], ['mrmime', 12], ['jolteon', 15]] as const) {
+        place(s, 0, card, { x, y: 18.3 }, { ready: true });
+      }
+      // Targets just inside everyone's range, so the shooters stand and fire.
+      for (const x of [3.5, 7.5, 10.5, 14.5]) place(s, 1, 'snorlax', { x, y: 14.3 }, { still: true });
+      // Something sturdy between the enemy starters, in both towers' range, so they keep firing.
+      place(s, 0, 'snorlax', { x: 9, y: 11.5 }, { still: true });
+      place(s, 1, 'rattata', { x: 3.5, y: 21.5 }, { still: true });
+    },
+  },
+  {
+    id: 'lightning', title: 'Lightning', view: 0,
+    note: 'Magneton zaps straight to its target; Zapdos\' Thunder arcs through a pack, stunning each one.',
+    setup(s) {
+      quietTowers(s);
+      place(s, 0, 'magneton', { x: 5, y: 20 });
+      place(s, 0, 'zapdos', { x: 12, y: 19 }, { ready: true });
+      for (const [x, y] of [[4, 15.5], [6, 14.5], [11, 15], [13, 14.2], [12.5, 16]] as const) place(s, 1, 'rattata', { x, y }, { still: true });
+    },
+  },
+  {
     id: 'evolve', title: 'Evolve', view: 0,
     note: 'Magikarp splashes uselessly at Machop, then evolves into Gyarados after 7 seconds.',
     setup(s) {

@@ -81,6 +81,16 @@ h1, h2 { margin: 0; }
 .muted { color: var(--muted); }
 .btn-icon { width: 1em; height: 1em; vertical-align: -0.12em; stroke-width: 2.6; }
 
+/* Sound on/off. */
+.sound-toggle { width: 36px; height: 36px; flex: none; display: grid; place-items: center; padding: 0; border: 2px solid var(--ink); background: var(--card); box-shadow: var(--shadow); cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
+.sound-toggle:hover { background: var(--accent); }
+.sound-toggle:active { transform: translate(3px, 3px); box-shadow: none; }
+.sound-toggle[aria-pressed='false'] { background: var(--muted-bg); }
+.sound-toggle svg { width: 20px; height: 20px; stroke-width: 2; }
+.hud-right { display: flex; align-items: flex-start; gap: 6px; }
+.hud-right .sound-toggle { pointer-events: auto; width: 32px; height: 32px; }
+.hud-right .sound-toggle svg { width: 18px; height: 18px; }
+
 /* Trophy counts and trophy changes. */
 .trophies { display: inline-flex; align-items: center; gap: 4px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 3px 10px 3px 6px; font-family: var(--head); font-size: 16px; white-space: nowrap; flex: none; }
 .trophies svg { width: 18px; height: 18px; stroke: var(--ink); stroke-width: 2; fill: var(--primary); flex: none; }
@@ -203,6 +213,7 @@ h1, h2 { margin: 0; }
 
 .deck-head { display: flex; align-items: center; justify-content: space-between; }
 .avg { display: flex; align-items: center; gap: 8px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 3px 10px 3px 4px; font-size: 15px; }
+.avg .drop span { font-size: 10px; -webkit-text-stroke: 2.5px var(--ink); }
 .deck-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .deck-grid.swapping .card { animation: wiggle 0.5s ease-in-out infinite alternate; }
 .deck-grid.swapping .card:nth-child(2n) { animation-delay: -0.25s; }
@@ -322,8 +333,14 @@ h1, h2 { margin: 0; }
 .mini-art { width: 30px; height: 30px; flex: none; background: var(--card); border: 1.5px solid var(--ink); display: grid; place-items: center; overflow: hidden; }
 .mini-art img { width: 130%; height: 130%; object-fit: contain; }
 .tower-matchups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tower-matchup { display: flex; align-items: center; gap: 5px; border: 2px solid var(--ink); background: var(--bg); padding: 3px; }
+.tower-matchup { display: flex; align-items: center; gap: 5px; border: 2px solid var(--ink); background: var(--bg); padding: 3px; min-width: 0; }
 .tower-mults { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A third of a phone is too narrow for portrait and labels side by side: stack them. */
+@media (max-width: 460px) {
+  .tower-matchup { flex-direction: column; padding: 4px 3px; }
+  .tower-mults { align-items: stretch; width: 100%; }
+  .mult { text-align: center; }
+}
 .mult { font-family: var(--head); font-size: 10px; white-space: nowrap; border: 1.5px solid var(--ink); padding: 0 4px 1px; background: var(--card); }
 .mult.good { background: #d9fbe3; color: var(--win); } .mult.bad { background: #ffe0e2; color: var(--destructive); }
 .modal-actions { position: sticky; bottom: 0; background: var(--card); padding: 8px 0 14px; }
@@ -496,7 +513,7 @@ h1, h2 { margin: 0; }
 }
 
 /* --- Boot: loading, then the title screen ------------------------------- */
-.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--primary); }
+.boot { position: fixed; top: 0; bottom: 0; left: var(--col-x); right: var(--col-x); z-index: 100; overflow: hidden; display: grid; place-items: center; padding: 20px 16px; background: var(--primary); container-type: inline-size; }
 .boot-rays {
   position: absolute; left: 50%; top: 34%; width: 260vmax; height: 260vmax; translate: -50% -50%;
   background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.32) 0deg 9deg, transparent 9deg 18deg);
@@ -504,11 +521,11 @@ h1, h2 { margin: 0; }
 }
 .boot::after { content: ''; position: absolute; inset: 0; background: radial-gradient(rgba(0,0,0,0.16) 1.2px, transparent 1.5px) 0 0 / 16px 16px; pointer-events: none; }
 @keyframes rays { to { rotate: 360deg; } }
-.boot-stage { position: relative; z-index: 1; width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.boot-stage { position: relative; z-index: 1; width: min(420px, 100%); min-width: 0; max-height: 100%; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 
 .boot-logo { display: flex; flex-direction: column; align-items: center; line-height: 0.92; rotate: -4deg; animation: logo-in 700ms cubic-bezier(.2,1.5,.4,1) both; }
 .boot-logo span { font-family: var(--head); text-transform: uppercase; letter-spacing: 0.01em; }
-.boot-logo-top, .boot-logo-bottom { font-size: clamp(40px, 13vw, 64px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--ink); }
+.boot-logo-top, .boot-logo-bottom { font-size: clamp(30px, 14cqi, 64px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 5px 5px 0 var(--ink); }
 .boot-logo-top { color: var(--destructive); }
 .boot-logo-of { font-size: 18px; background: var(--ink); color: var(--primary); padding: 2px 10px 4px; margin: 4px 0 6px; rotate: 4deg; }
 @keyframes logo-in { from { scale: 2.2; opacity: 0; rotate: -14deg; } }

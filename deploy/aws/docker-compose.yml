@@ -1,0 +1,31 @@
+# The game server behind Caddy, which gets a Let's Encrypt certificate for $DOMAIN and
+# proxies HTTP and WebSockets to it. Run from this folder: docker compose up -d --build
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    # SUPABASE_URL and SUPABASE_SECRET_KEY, written by bootstrap.sh / update.sh from SSM.
+    env_file: .env
+    expose:
+      - "2567"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN to the server's hostname}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

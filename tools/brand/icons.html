@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- App icons: the mark on the game's yellow, rendered by render.mjs at each size. ?size=N&pad=0.14[&bare] -->
+<html><head><meta charset="utf-8"><style>
+  /* The tile sits dead centre; render.mjs centre-crops the oversized window to it. */
+  html, body { margin: 0; height: 100%; background: transparent; }
+  body { display: grid; place-items: center; }
+  /* Sized in pixels from ?size: headless Chrome won't make a window narrower than ~500px. */
+  .tile { width: var(--size); height: var(--size); display: grid; place-items: center; background:
+    radial-gradient(rgba(0,0,0,0.16) 1.1px, transparent 1.4px) 0 0 / calc(var(--size) / 12) calc(var(--size) / 12), #ffdb33; }
+  .tile.bare { background: transparent; }
+  img { width: calc(var(--size) * (1 - 2 * var(--pad))); display: block; }
+</style></head>
+<body><div class="tile"><img src="icon.svg" alt=""></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  document.documentElement.style.setProperty('--pad', q.get('pad') ?? '0.14');
+  document.documentElement.style.setProperty('--size', `${q.get('size') ?? 512}px`);
+  if (q.has('bare')) document.querySelector('.tile').classList.add('bare');
+</script></body></html>

@@ -1,0 +1,5 @@
+# Automatic HTTPS for the game server's hostname; WebSocket upgrades are proxied as-is.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy server:2567
+}

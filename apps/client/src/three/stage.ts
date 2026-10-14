@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Point, Team } from '@cop/shared';
 import { fromScene } from './coords.js';
+import { GbaPass } from './style/gba.js';
 
 export interface StageOptions {
   /** Which side the camera sits behind. */
@@ -8,6 +9,8 @@ export interface StageOptions {
   /** 'battle' frames the whole arena for play; 'diorama' is the menu's angled showcase. */
   framing: 'battle' | 'diorama';
   shadows: boolean;
+  /** Dev tools only: move the battle camera in by this factor. */
+  zoom?: number;
 }
 
 type FrameFn = (dt: number, t: number) => void;
@@ -26,13 +29,14 @@ export class Stage {
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly resizeObserver: ResizeObserver;
+  private readonly gba = new GbaPass();
   private running = false;
   private shakeAmount = 0;
   private elapsed = 0;
   private orbit = 0;
 
   constructor(readonly host: HTMLElement, readonly opts: StageOptions) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // Neutral keeps the saturated, toy-like greens; ACES greys them out.
@@ -98,6 +102,7 @@ export class Stage {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) mesh.geometry.dispose();
     });
+    this.gba.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -126,6 +131,8 @@ export class Stage {
     const w = Math.max(1, this.host.clientWidth);
     const h = Math.max(1, this.host.clientHeight);
     this.renderer.setSize(w, h, false);
+    const buf = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.gba.setSize(buf.x, buf.y, this.renderer.getPixelRatio());
     this.camera.aspect = w / h;
     this.frame();
   }
@@ -151,7 +158,7 @@ export class Stage {
     const needW = 19.6 / (2 * Math.tan(vFov / 2) * cam.aspect);
     // Depth budget includes headroom for the far king tower and the HUD strip over it.
     const needH = (37 * Math.sin(pitch)) / (2 * Math.tan(vFov / 2)) + 3;
-    const dist = Math.max(needW, needH);
+    const dist = Math.max(needW, needH) / (this.opts.zoom ?? 1);
     const look = new THREE.Vector3(0, 0, side * 0.2);
     cam.position.set(0, look.y + Math.sin(pitch) * dist, look.z + side * Math.cos(pitch) * dist);
     cam.lookAt(look);
@@ -174,7 +181,7 @@ export class Stage {
     const oy = (Math.random() - 0.5) * this.shakeAmount * 0.5;
     cam.x += ox;
     cam.y += oy;
-    this.renderer.render(this.scene, this.camera);
+    this.gba.render(this.renderer, this.scene, this.camera);
     cam.x -= ox;
     cam.y -= oy;
     this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.8);

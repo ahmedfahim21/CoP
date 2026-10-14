@@ -7,3 +7,5 @@
 .sandbox-bar .btn[aria-pressed='true'] { background: var(--primary); }
 .sandbox-note { position: absolute; left: 8px; top: 8px; max-width: 70%; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 6px 10px; font-size: 14px; pointer-events: none; }
 .sandbox-note small { display: block; font-size: 12px; color: var(--muted); }
+/* Dev pages fill the window; the game's phone-column gutters don't apply. */
+body:has(#sandbox)::before, body:has(#sandbox)::after { display: none; }

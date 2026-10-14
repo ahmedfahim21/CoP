@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { litMat } from './style/toon.js';
 import { seeded } from './palette.js';
 
 /**
@@ -131,8 +132,17 @@ interface Ring {
 const tmpColor = new THREE.Color();
 
 /** Effects library: every call is fire-and-forget, positioned in scene space. */
+/** A self-running effect hosted by Fx: updated every frame until it reports it's done. */
+export interface Effect {
+  object: THREE.Object3D;
+  /** Advance by `dt`; return false when finished. */
+  update(dt: number): boolean;
+  dispose(): void;
+}
+
 export class Fx {
   readonly group = new THREE.Group();
+  private readonly effects: Effect[] = [];
   private readonly glow = new ParticleSystem(1400, true);
   private readonly soft = new ParticleSystem(900, false);
   private readonly debris: Debris[] = [];
@@ -150,7 +160,19 @@ export class Fx {
     this.soft.setViewportScale(heightPx, fovDeg);
   }
 
+  addEffect(e: Effect) {
+    this.group.add(e.object);
+    this.effects.push(e);
+  }
+
   update(dt: number) {
+    for (let i = this.effects.length - 1; i >= 0; i--) {
+      const e = this.effects[i]!;
+      if (e.update(dt)) continue;
+      this.effects.splice(i, 1);
+      e.object.removeFromParent();
+      e.dispose();
+    }
     this.glow.update(dt);
     this.soft.update(dt);
     for (let i = this.debris.length - 1; i >= 0; i--) {
@@ -284,7 +306,7 @@ export class Fx {
   /** Stone chunks flying out of a destroyed tower. */
   rubble(at: THREE.Vector3, color: number, count = 22, power = 1) {
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(this.debrisGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.9 }));
+      const mesh = new THREE.Mesh(this.debrisGeo, litMat({ color, roughness: 0.9 }));
       const s = 0.8 + this.rnd() * 1.8;
       mesh.userData.s = s;
       mesh.scale.setScalar(s);

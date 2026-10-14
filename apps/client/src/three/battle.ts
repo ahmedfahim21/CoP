@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import {
-  ARENA_W, CARDS, DEPLOY_MIN_Y, POCKET_MIN_Y, RIVER_BOTTOM, RIVER_TOP, canDeployCard, mirror, openPocketsFrom, statsOf, unitName,
-  type CardId, type Entity, type GameEvent, type Point, type Team, type UnitId,
+  ARENA_W, CARDS, DEPLOY_MIN_Y, FORMS, POCKET_MIN_Y, RIVER_BOTTOM, RIVER_TOP, canDeployCard, mirror, openPocketsFrom, statsOf, unitName,
+  type CardId, type Entity, type FormId, type GameEvent, type Point, type Team, type UnitId,
 } from '@cop/shared';
+import { sound, type PlayOpts } from '../audio/sound.js';
 /** Minimal map view shared by Colyseus MapSchema and plain Maps. */
 export interface MapLike<V> {
   forEach(fn: (value: V, key: string) => void): void;
@@ -33,6 +34,7 @@ export interface BattleSource {
 import { buildArena, type Arena } from './arena.js';
 import { toScene } from './coords.js';
 import { Fx } from './fx.js';
+import { flashArc } from './moves.js';
 import { INTERP_DELAY_MS } from './interp.js';
 import { teamColor } from './palette.js';
 import { buildRig } from './rigs/registry.js';
@@ -87,11 +89,11 @@ export class BattleView {
   private readonly lastText = new Map<string, number>();
   private readonly unsubs: Array<() => void> = [];
 
-  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks) {
+  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks, zoom?: number) {
     const team = session.team;
     if (team === undefined) throw new Error('BattleView created before the player has a team');
     this.team = team;
-    this.stage = new Stage(host, { team, framing: 'battle', shadows: true });
+    this.stage = new Stage(host, { team, framing: 'battle', shadows: true, zoom });
     this.arena = buildArena();
     this.stage.scene.add(this.arena.group, this.fx.group);
 
@@ -281,9 +283,14 @@ export class BattleView {
 
   private frame(dt: number, t: number) {
     const now = performance.now();
-    const ctx: FrameCtx = { renderTime: now - INTERP_DELAY_MS, dt, t, fx: this.fx, positionOf: this.positionOf };
+    const obstacles = [...this.towers.values()].flatMap((tw) => tw.obstacle() ?? []);
+    const ctx: FrameCtx = { renderTime: now - INTERP_DELAY_MS, dt, t, fx: this.fx, positionOf: this.positionOf, obstacles };
 
-    while (this.events.length > 0 && this.events[0]!.at <= now) this.applyEvent(this.events.shift()!.value);
+    while (this.events.length > 0 && this.events[0]!.at <= now) {
+      const ev = this.events.shift()!.value;
+      this.eventSound(ev);
+      this.applyEvent(ev);
+    }
     for (let i = this.removals.length - 1; i >= 0; i--) {
       const r = this.removals[i]!;
       if (r.at > now) continue;
@@ -339,6 +346,12 @@ export class BattleView {
         if (u) {
           u.attack(ev.targetId);
           this.attackFx(u.rig.attackStyle, u.muzzleWorld(), ev.targetId, u.defId, u.id);
+          // Instant ranged lightning (Magneton) has no projectile: arc straight to the target.
+          const stats = statsOf({ kind: 'unit', defId: u.defId });
+          const target = this.positionOf(ev.targetId);
+          if (target && stats.move.type === 'electric' && stats.projectileSpeed === 0 && stats.range >= 2 && stats.ability?.kind !== 'chain') {
+            flashArc(this.fx, u.muzzleWorld(), target, 0.2, 0.9);
+          }
         }
         if (t) {
           t.attack(ev.targetId);
@@ -408,11 +421,117 @@ export class BattleView {
         if (at) this.flavourText(ev.id, at, `What? ${unitName(ev.from)} is evolving!`, 'special', true);
         break;
       }
+      case 'chain': {
+        // Zapdos' Thunder: one arc from the caster, then a hop to each next target.
+        const caster = this.units.get(ev.path[0]!);
+        let from = caster ? caster.muzzleWorld() : this.positionOf(ev.path[0]!);
+        for (const id of ev.path.slice(1)) {
+          const to = this.positionOf(id);
+          if (!from || !to) break;
+          flashArc(this.fx, from, to, 0.3, 1.1);
+          from = to;
+        }
+        break;
+      }
       case 'spawn': {
         const s = toScene(ev);
         this.fx.ring(new THREE.Vector3(s.x, 0, s.z), teamColor(ev.team === this.team), 1.6, 0.35);
         break;
       }
+    }
+  }
+
+  // --- Sound ---
+
+  /** Volume and stereo position for a sound at a scene point: louder on our side. */
+  private soundAt(at: THREE.Vector3 | null, mine: boolean, scale = 1): PlayOpts {
+    const volume = (mine ? 0.8 : 0.6) * scale;
+    if (!at) return { volume };
+    const p = this.stage.project(at);
+    return { volume, pan: ((p.x / Math.max(1, this.stage.host.clientWidth)) * 2 - 1) * 0.7 };
+  }
+
+  private sceneAt(p: Point): THREE.Vector3 {
+    const s = toScene(p);
+    return new THREE.Vector3(s.x, 0.5, s.z);
+  }
+
+  private teamOf(id: string): boolean {
+    return (this.units.get(id) ?? this.towers.get(id))?.mine ?? false;
+  }
+
+  private eventSound(ev: GameEvent) {
+    switch (ev.type) {
+      case 'attack': {
+        const u = this.units.get(ev.id);
+        const t = this.towers.get(ev.id);
+        const who = u ?? t;
+        if (!who) break;
+        const stats = statsOf(u ? { kind: 'unit', defId: u.defId } : { kind: t!.kind, defId: t!.defId as Entity['defId'] });
+        // Towers fire constantly; keep them under the troops.
+        sound.move(stats.move.type, this.soundAt(this.positionOf(ev.id), who.mine, t ? 0.5 : 1));
+        break;
+      }
+      case 'hit': {
+        if (ev.damage === 0) break;
+        const opts = this.soundAt(this.sceneAt(ev), !this.teamOf(ev.targetId));
+        sound.play(ev.effectiveness === 'super' ? 'hitSuper' : ev.effectiveness === 'neutral' ? 'hit' : 'hitWeak', opts);
+        if (ev.status === 'stun') sound.play('paralyze', opts);
+        break;
+      }
+      case 'death': {
+        const opts = this.soundAt(this.sceneAt(ev), ev.team === this.team);
+        const u = this.units.get(ev.id);
+        if (ev.kind === 'king') sound.play('kingDown', { ...opts, volume: 1 });
+        else if (ev.kind === 'princess') sound.play('towerDown', { ...opts, volume: 1 });
+        else if (u?.rig.attackStyle === 'explode') sound.play('explosion', opts);
+        else sound.play('faint', opts);
+        break;
+      }
+      case 'blast':
+        sound.play('explosion', this.soundAt(this.sceneAt(ev), ev.team === this.team));
+        break;
+      case 'heal':
+        sound.play('heal', this.soundAt(this.sceneAt(ev), this.teamOf(ev.id), 0.8));
+        break;
+      case 'charge':
+        sound.play('charge', this.soundAt(this.positionOf(ev.id), this.teamOf(ev.id)));
+        break;
+      case 'evolve': {
+        const opts = this.soundAt(this.sceneAt(ev), this.teamOf(ev.id));
+        sound.play('evolve', opts);
+        const form = FORMS[ev.into as FormId];
+        if (form) window.setTimeout(() => sound.cry(form.dex, opts), 950);
+        break;
+      }
+      case 'spawn': {
+        // The Poké Ball lands and pops, then the Pokémon calls out.
+        const opts = this.soundAt(this.sceneAt(ev), ev.team === this.team);
+        sound.play('deploy', opts);
+        window.setTimeout(() => sound.cry(CARDS[ev.cardId].dex, opts), 260);
+        break;
+      }
+      case 'jump':
+        sound.move('flying', this.soundAt(this.sceneAt(ev), this.teamOf(ev.id)));
+        break;
+      case 'slam':
+        sound.play('slam', this.soundAt(this.sceneAt(ev), this.teamOf(ev.id)));
+        break;
+      case 'rage':
+        sound.play('rage', this.soundAt(this.positionOf(ev.id), this.teamOf(ev.id)));
+        break;
+      case 'shieldBreak':
+        sound.play('shieldBreak', this.soundAt(this.positionOf(ev.id), this.teamOf(ev.id)));
+        break;
+      case 'chain':
+        sound.play('paralyze', this.soundAt(this.positionOf(ev.id), this.teamOf(ev.id), 0.8));
+        break;
+      case 'cloud':
+        sound.move('poison', this.soundAt(this.sceneAt(ev), ev.team === this.team));
+        break;
+      case 'knock':
+        sound.play('hit', this.soundAt(this.positionOf(ev.id), this.teamOf(ev.id)));
+        break;
     }
   }
 

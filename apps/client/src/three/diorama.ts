@@ -27,7 +27,7 @@ export function createDiorama(host: HTMLElement, starters: StarterPick): { dispo
       stage.scene.add(t.model.group);
     }
   }
-  const ctx: FrameCtx = { renderTime: 0, dt: 0, t: 0, fx, positionOf: () => null };
+  const ctx: FrameCtx = { renderTime: 0, dt: 0, t: 0, fx, positionOf: () => null, obstacles: [] };
   let nextShot = 1.5;
   stage.onFrame((dt, t) => {
     ctx.dt = dt;

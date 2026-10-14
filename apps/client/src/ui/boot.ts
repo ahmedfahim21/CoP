@@ -2,6 +2,7 @@ import { ATTACKING_TYPES, CARDS, CARD_IDS, DEFENDING_TYPES, FORMS, STARTERS, tra
 import { trainerSpriteUrl } from '../config.js';
 import { loadModels } from '../three/rigs/models.js';
 import { h } from './dom.js';
+import { sound } from '../audio/sound.js';
 
 /** Gen III (Emerald) pixel sprites, ~600 bytes each. */
 const EMERALD = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-iii/emerald';
@@ -99,9 +100,15 @@ export async function bootModels({ splash = false } = {}): Promise<void> {
   const leave = () => {
     window.clearInterval(tipTimer);
     el.classList.add('leaving');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
+    // Removed when the slide-out ends, or shortly after if no animation runs (reduced
+    // motion, background tab), so the overlay can never be left covering the game.
+    el.addEventListener('animationend', (e) => {
+      if (e.target === el) el.remove();
+    });
+    window.setTimeout(() => el.remove(), 900);
   };
   if (!splash) {
+    window.addEventListener('pointerdown', () => sound.unlock(), { once: true });
     leave();
     return;
   }
@@ -110,6 +117,8 @@ export async function bootModels({ splash = false } = {}): Promise<void> {
   play.hidden = false;
   play.focus();
   const start = () => {
+    sound.unlock();
+    sound.play('select');
     window.removeEventListener('keydown', onKey);
     leave();
   };

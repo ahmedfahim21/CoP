@@ -552,7 +552,7 @@ function updateUnit(state: MatchState, unit: Entity, byId: Map<string, Entity>, 
   const rage = abilityOf(unit, 'rage');
   const wasCharging = isCharging(unit);
   const speed = stats.speed * (wasCharging && charge ? charge.speedMult : 1) * (rage && unit.enraged ? rage.speedMult : 1);
-  const moved = moveToward(unit, nextWaypoint(unit, target), speed * dt);
+  const moved = moveToward(unit, steerAround(state, unit, nextWaypoint(unit, target), target), speed * dt);
   if (charge) {
     unit.charge += moved;
     if (!wasCharging && isCharging(unit)) state.events.push({ type: 'charge', id: unit.id });
@@ -575,6 +575,49 @@ function nextWaypoint(unit: Entity, target: Entity): Point {
   const exitY = goingUp ? RIVER_TOP - 0.6 : RIVER_BOTTOM + 0.6;
   if (!onBridge) return { x: bridgeX, y: inRiver(unit.y) ? unit.y : entryY };
   return { x: bridgeX, y: exitY };
+}
+
+/**
+ * Ground units walk straight at their waypoint, and towers only push them back out along the
+ * line between centres — so a unit directly behind a tower would push into it forever. If a
+ * structure other than the target blocks the straight path, head for a point beside it on
+ * the side nearer the way we're going; once past, the straight path is clear again.
+ */
+function steerAround(state: MatchState, unit: Entity, to: Point, target: Entity): Point {
+  const stats = statsOf(unit);
+  if (stats.flying) return to;
+  const dx = to.x - unit.x;
+  const dy = to.y - unit.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return to;
+  const ux = dx / len;
+  const uy = dy / len;
+  let block: { s: Entity; along: number; side: number; clear: number } | null = null;
+  for (const s of state.entities) {
+    if (s === target || s.hp <= 0 || !isStructure(s)) continue;
+    const clear = statsOf(s).radius + stats.radius + 0.2;
+    const sx = s.x - unit.x;
+    const sy = s.y - unit.y;
+    const along = sx * ux + sy * uy;
+    // Sideways offset of the structure along n = (-uy, ux), the normal we'll step along.
+    const offset = -sx * uy + sy * ux;
+    if (along <= -clear * 0.5 || along > len + clear || Math.abs(offset) >= clear) continue;
+    if (!block || along < block.along) {
+      // Pass on the side away from the structure (stable: stepping that way only grows the
+      // offset). Dead centre: the side towards the middle of the arena, then a fixed side.
+      const towardMiddle = Math.sign((ARENA_W / 2 - s.x) * -uy);
+      const side = Math.abs(offset) > 1e-3 ? -Math.sign(offset) : towardMiddle || (unit.team === 0 ? 1 : -1);
+      block = { s, along, side, clear };
+    }
+  }
+  if (!block) return to;
+  // A point beside the structure, a little past its centre, along our direction of travel.
+  const nx = -uy * block.side;
+  const ny = ux * block.side;
+  return {
+    x: block.s.x + nx * block.clear * 1.15 + ux * 0.4,
+    y: block.s.y + ny * block.clear * 1.15 + uy * 0.4,
+  };
 }
 
 /** Returns the distance actually moved. */
