@@ -33,7 +33,7 @@ export function apiRouter(store: ProfileStore): express.Router {
   });
   router.use(express.json({ limit: '4kb' }));
 
-  router.post('/profiles', (req, res) => {
+  router.post('/profiles', async (req, res) => {
     const ip = req.ip ?? 'unknown';
     const now = Date.now();
     const recent = (creations.get(ip) ?? []).filter((t) => now - t < CREATE_LIMIT.windowMs);
@@ -43,43 +43,43 @@ export function apiRouter(store: ProfileStore): express.Router {
     }
     creations.set(ip, [...recent, now]);
     const body = (req.body ?? {}) as { name?: unknown };
-    const { profile, credential } = store.create(body.name);
+    const { profile, credential } = await store.create(body.name);
     logger.info(`[api] created profile ${profile.id} (${profile.name})`);
     res.status(201).json({ profile, credential } satisfies CreatedProfileResponse);
   });
 
-  router.get('/profiles/me', (req, res) => {
-    const me = authenticate(store, req, res);
+  router.get('/profiles/me', async (req, res) => {
+    const me = await authenticate(store, req, res);
     if (!me) return;
-    res.json({ profile: me, matches: store.recentMatches(me.id) } satisfies OwnProfileResponse);
+    res.json({ profile: me, matches: await store.recentMatches(me.id) } satisfies OwnProfileResponse);
   });
 
-  router.patch('/profiles/me', (req, res) => {
-    const me = authenticate(store, req, res);
+  router.patch('/profiles/me', async (req, res) => {
+    const me = await authenticate(store, req, res);
     if (!me) return;
     const body = (req.body ?? {}) as ProfileUpdate;
-    const { profile, rejected } = store.update(me.id, { name: body.name, deck: body.deck, starters: body.starters });
+    const { profile, rejected } = await store.update(me.id, { name: body.name, deck: body.deck, starters: body.starters });
     if (rejected.length > 0) {
       res.status(400).json({ error: `Invalid ${rejected.join(' and ')}` });
       return;
     }
-    res.json({ profile: profile!, matches: store.recentMatches(me.id) } satisfies OwnProfileResponse);
+    res.json({ profile: profile!, matches: await store.recentMatches(me.id) } satisfies OwnProfileResponse);
   });
 
-  router.get('/profiles/:id', (req, res) => {
+  router.get('/profiles/:id', async (req, res) => {
     const id = String(req.params.id).toUpperCase();
-    const profile = isProfileTag(id) ? store.get(id) : null;
+    const profile = isProfileTag(id) ? await store.get(id) : null;
     if (!profile) {
       res.status(404).json({ error: 'No such trainer' });
       return;
     }
-    res.json({ profile, matches: store.recentMatches(id) } satisfies ProfileResponse);
+    res.json({ profile, matches: await store.recentMatches(id) } satisfies ProfileResponse);
   });
 
-  router.get('/leaderboard', (req, res) => {
+  router.get('/leaderboard', async (req, res) => {
     const limit = clampInt(req.query.limit, 1, 100, 50);
     const offset = clampInt(req.query.offset, 0, 1_000_000, 0);
-    res.json(store.leaderboard(limit, offset) satisfies LeaderboardResponse);
+    res.json((await store.leaderboard(limit, offset)) satisfies LeaderboardResponse);
   });
 
   router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -91,10 +91,10 @@ export function apiRouter(store: ProfileStore): express.Router {
   return router;
 }
 
-function authenticate(store: ProfileStore, req: Request, res: Response) {
+async function authenticate(store: ProfileStore, req: Request, res: Response) {
   const header = req.get('authorization') ?? '';
   const credential = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-  const me = credential ? store.authenticate(credential) : null;
+  const me = credential ? await store.authenticate(credential) : null;
   if (!me) res.status(401).json({ error: 'Profile not recognised' });
   return me;
 }

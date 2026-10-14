@@ -1,4 +1,4 @@
-import { Bot, Copy, Crown, Dumbbell, Swords, Trophy, Users } from 'lucide';
+import { Bot, Copy, Crown, Dumbbell, Swords, Trophy, Users } from './icons.js';
 import type { BattleStats, MatchMode, QueueStatusMessage, RematchStateMessage, SummaryMessage, Team } from '@cop/shared';
 import { h, icon } from './dom.js';
 import { avatar } from './home.js';

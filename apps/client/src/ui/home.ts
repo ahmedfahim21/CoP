@@ -1,5 +1,5 @@
-import { Bird, Castle, Crosshair, Dumbbell, Footprints, Heart, Layers, Pencil, Shield, Sparkles, Swords, Target, Timer, Trophy, User, Users, Zap } from 'lucide';
-import { CARDS, CARD_IDS, FORMS, STARTERS, arenaFor, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type StarterId, type StarterPick } from '@cop/shared';
+import { Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
+import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type TypeMatchup, type StarterPick } from '@cop/shared';
 import { ALL_STARTERS, type Prefs } from '../prefs.js';
 import type { ProfileSession } from '../profile.js';
 import { createDiorama } from '../three/diorama.js';
@@ -208,6 +208,11 @@ export class Home {
     let pending: CardId | null = null;
     const render = () => {
       const deck = this.prefs.deck;
+      /** Cards outside the deck get a "Use" button in their detail screen. */
+      const useFor = (id: CardId) => (deck.includes(id) ? null : () => {
+        pending = id;
+        render();
+      });
       const avg = deck.reduce((sum, id) => sum + CARDS[id].cost, 0) / deck.length;
       const grid = h('div', { class: pending ? 'deck-grid swapping' : 'deck-grid' });
       for (const id of deck) {
@@ -219,7 +224,7 @@ export class Home {
             pending = null;
             render();
           } else {
-            showCardDetail(id, null);
+            showCardDetail(id, useFor);
           }
         });
         grid.append(c);
@@ -229,10 +234,7 @@ export class Home {
       for (const id of rest) {
         const c = cardEl(id, { count: true });
         if (pending === id) c.classList.add('picked');
-        c.addEventListener('click', () => showCardDetail(id, () => {
-          pending = id;
-          render();
-        }));
+        c.addEventListener('click', () => showCardDetail(id, useFor));
         collection.append(c);
       }
       const cancel = h('button', { class: 'btn small' }, 'Cancel');
@@ -322,43 +324,78 @@ export function avatar(look: 'red' | 'blue'): HTMLDivElement {
   return h('div', { class: look === 'red' ? 'avatar' : 'avatar enemy' }, img);
 }
 
-function typePills(types: readonly string[]): HTMLDivElement {
-  return h('div', { class: 'types' }, ...types.map((t) => h('span', { class: 'type-pill', data: { type: t }, textContent: t })));
+function typePills(types: readonly PokeType[]): HTMLDivElement {
+  return h('div', { class: 'types' }, ...types.map((t) => typePill(t)));
+}
+
+/** A type badge; `note` adds a multiplier such as ×2. */
+function typePill(t: PokeType, note: string | null = null): HTMLSpanElement {
+  return h('span', { class: 'type-pill', data: { type: t } }, icon(TYPE_ICONS[t]), t, note ? h('span', { class: 'type-note', textContent: note }) : null);
 }
 
 const TARGETS: Record<string, string> = { ground: 'Ground', 'air-ground': 'Air & ground', buildings: 'Towers only' };
-const speedName = (s: number) => (s >= 2 ? 'Very fast' : s >= 1.5 ? 'Fast' : s >= 1 ? 'Medium' : 'Slow');
+const RARITY: Record<string, string> = { common: 'Common', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
+const speedName = (s: number) => (s === 0 ? 'Stationary' : s >= 2 ? 'Very fast' : s >= 1.5 ? 'Fast' : s >= 1 ? 'Medium' : 'Slow');
+const times = (m: number) => `×${m}`;
 
-/** Card stats; `onUse` adds a "Use" button for cards outside the deck. */
-function showCardDetail(id: CardId, onUse: (() => void) | null) {
+/**
+ * Everything about a card: special traits with their numbers, roles, stats, type matchups
+ * and how it fares against each starter tower. `useFor` decides whether a card gets a
+ * "Use" button (cards outside the deck).
+ */
+function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null) {
   const def = CARDS[id];
   const s = def.stats;
-  const evolvesInto = s.ability?.kind === 'evolve' ? FORMS[s.ability.into] : null;
-  const stat = (ic: Parameters<typeof icon>[0], k: string, v: string) => h('div', { class: 'stat' }, icon(ic), h('div', {}, h('div', { class: 'k', textContent: k }), h('div', { class: 'v stroke', textContent: v })));
+  const info = cardInfo(id);
+  const onUse = useFor(id);
+  const stat = (ic: IconData, k: string, v: string) => h('div', { class: 'stat' }, icon(ic), h('div', {}, h('div', { class: 'k', textContent: k }), h('div', { class: 'v stroke', textContent: v })));
   const close = h('button', { class: onUse ? 'btn' : 'btn gold' }, 'OK');
   const use = onUse ? h('button', { class: 'btn gold' }, 'Use') : null;
-  const card = cardEl(id, { count: true });
+
+  const matchRow = (label: string, list: readonly TypeMatchup[], empty: string) =>
+    h('div', { class: 'match-type-row' },
+      h('span', { class: 'match-type-label stroke', textContent: label }),
+      list.length
+        ? h('div', { class: 'types' }, ...list.map((m) => typePill(m.type, m.multiplier === 1.5 ? null : times(m.multiplier))))
+        : h('span', { class: 'detail-empty', textContent: empty }));
+
+  const damageLabel = s.splashRadius > 0 || s.ability?.kind === 'spin' ? 'Area damage' : 'Damage';
+  const damageValue = s.ability?.kind === 'ramp' ? `${s.damage}→${s.damage * s.ability.multipliers[s.ability.multipliers.length - 1]!}` : String(s.damage);
+
   const backdrop = h('div', { class: 'modal-backdrop' },
-    h('div', { class: 'modal', attrs: { role: 'dialog', 'aria-label': def.name } },
-      h('div', { class: 'modal-head' }, card, h('div', {}, h('h2', { textContent: def.name }), typePills(s.types))),
-      def.special
+    h('div', { class: 'modal card-modal', attrs: { role: 'dialog', 'aria-label': def.name } },
+      h('div', { class: 'modal-head' }, cardEl(id, { count: true }),
+        h('div', { class: 'modal-head-text' },
+          h('h2', { textContent: def.name }),
+          h('div', { class: 'detail-sub' }, h('span', { class: `rarity-tag ${def.rarity}`, textContent: RARITY[def.rarity]! }), dropEl(def.cost), `${def.cost} elixir`),
+          typePills(s.types),
+          h('div', { class: 'role-row' }, ...info.roles.map((r) => h('span', { class: 'role-tag', textContent: ROLE_NAMES[r] }))))),
+      def.special || info.traits.length
         ? h('div', { class: 'special' },
-          h('div', { class: 'special-name stroke' }, icon(Sparkles), def.special.name),
-          h('div', { class: 'special-text', textContent: def.special.text }),
-          evolvesInto ? h('div', { class: 'special-text', textContent: `Evolves into ${evolvesInto.name}: ${evolvesInto.stats.hp} HP, ${evolvesInto.stats.move.name} for ${evolvesInto.stats.damage} area damage.` }) : null)
+          def.special ? h('div', { class: 'special-name stroke' }, icon(Sparkles), def.special.name) : h('div', { class: 'special-name stroke' }, icon(Info), 'Traits'),
+          def.special ? h('div', { class: 'special-text', textContent: def.special.text }) : null,
+          info.traits.length ? h('ul', { class: 'trait-list' }, ...info.traits.map((t) => h('li', { textContent: t }))) : null)
         : null,
-      h('div', { class: 'move-line stroke' }, icon(Swords), `${s.move.name}`, h('span', { class: 'type-pill', data: { type: s.move.type }, textContent: s.move.type })),
+      h('div', { class: 'move-line' }, icon(Swords), h('span', { class: 'stroke', textContent: s.move.name }), typePill(s.move.type),
+        h('span', { class: 'move-dps', textContent: s.damage > 0 ? `${info.dps} DPS` : 'No damage' })),
       h('div', { class: 'stats' },
-        stat(Heart, 'Hitpoints', String(s.hp)),
-        stat(Zap, s.splashRadius > 0 ? 'Area damage' : 'Damage', s.ability?.kind === 'ramp' ? `${s.damage}→${s.damage * s.ability.multipliers[s.ability.multipliers.length - 1]!}` : String(s.damage)),
+        stat(Heart, 'Hitpoints', def.count > 1 ? `${s.hp} ×${def.count}` : String(s.hp)),
+        stat(Zap, damageLabel, damageValue),
         stat(Timer, 'Hit speed', `${s.hitSpeed}s`),
-        stat(Crosshair, 'Range', s.range >= 2 ? `${s.range}` : 'Melee'),
+        stat(Crosshair, 'Range', s.range >= 2 ? `${s.range} tiles` : 'Melee'),
         stat(Footprints, 'Speed', speedName(s.speed)),
         stat(Target, 'Targets', TARGETS[s.targets]!),
-        stat(Shield, 'Count', def.count > 1 ? `×${def.count}` : '1'),
-        stat(Bird, 'Flying', s.flying ? 'Yes' : 'No'),
       ),
-      h('div', { class: 'row' }, close, use),
+      h('div', { class: 'type-matchups' },
+        matchRow('Strong vs', info.strongAgainst, s.damage > 0 ? 'No type advantage' : 'Deals no damage'),
+        matchRow('Weak to', info.weakAgainst, 'No weaknesses'),
+        matchRow('Resists', info.resists, 'Nothing')),
+      h('div', { class: 'tower-matchups' }, ...info.towers.map((t) => h('div', { class: 'tower-matchup', attrs: { title: `${STARTERS[t.id].name} tower` } },
+        h('span', { class: 'mini-art' }, starterArt(t.id)),
+        h('div', { class: 'tower-mults' },
+          h('span', { class: `mult ${tone(t.dealt)}`, textContent: `deals ${times(t.dealt)}` }),
+          h('span', { class: `mult ${tone(1 / t.taken)}`, textContent: `takes ${times(t.taken)}` }))))),
+      h('div', { class: 'row modal-actions' }, close, use),
     ),
   );
   const dismiss = () => backdrop.remove();
@@ -372,3 +409,6 @@ function showCardDetail(id: CardId, onUse: (() => void) | null) {
   });
   document.body.append(backdrop);
 }
+
+/** Good for this card above 1, bad below. */
+const tone = (m: number) => (m > 1 ? 'good' : m < 1 ? 'bad' : 'plain');

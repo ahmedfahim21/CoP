@@ -11,6 +11,7 @@ import { createAppServer } from '../src/app.js';
 import { BOT_DECKS, BattleRoom } from '../src/BattleRoom.js';
 import { QueueRoom } from '../src/QueueRoom.js';
 import { ProfileStore } from '../src/store.js';
+import { testRpc } from './pglite.js';
 import { isDeck } from '@cop/shared';
 
 const RED: StarterPick = ['bulbasaur', 'charmander'];
@@ -20,12 +21,12 @@ let colyseus: ColyseusTestServer;
 let store: ProfileStore;
 
 beforeAll(async () => {
-  store = new ProfileStore(':memory:');
+  store = new ProfileStore(await testRpc());
   colyseus = await boot(createAppServer({ store }));
 });
 afterAll(async () => {
   await colyseus.shutdown();
-  store.close();
+  await store.close();
 });
 afterEach(async () => {
   QueueRoom.botAfterSeconds = 30;
@@ -164,8 +165,8 @@ describe('ranked queue', () => {
     expect(summary.mode).toBe('ranked');
     expect(summary.teams[ashTeam]).toMatchObject({ trophies: 30, delta: 30 });
     expect(summary.teams[ashTeam].stats.towerDamage).toBeGreaterThan(0);
-    expect(store.get(ash.profile.id)).toMatchObject({ trophies: 30, wins: 1, rank: 1 });
-    expect(store.get(gary.profile.id)).toMatchObject({ losses: 1, rank: 2 });
+    expect((await store.get(ash.profile.id))).toMatchObject({ trophies: 30, wins: 1, rank: 1 });
+    expect((await store.get(gary.profile.id))).toMatchObject({ losses: 1, rank: 2 });
 
     const board = (await colyseus.http.get('/api/leaderboard')).data as LeaderboardResponse;
     expect(board.entries[0]).toMatchObject({ id: ash.profile.id, trophies: 30, wins: 1, rank: 1 });
@@ -182,8 +183,8 @@ describe('ranked queue', () => {
     const room = colyseus.getRoomById<BattleRoom>(sa.room.roomId);
     await vi.waitFor(() => expect(room.state.phase).toBe('countdown'));
     await sa.room.leave();
-    await vi.waitFor(() => expect(store.get(a.profile.id)!.losses).toBe(1));
-    expect(store.get(b.profile.id)!.wins).toBe(1);
+    await vi.waitFor(async () => expect((await store.get(a.profile.id))!.losses).toBe(1));
+    expect((await store.get(b.profile.id))!.wins).toBe(1);
   });
 
   it('two tabs on one profile still get a battle, but it is unrated', async () => {
@@ -197,7 +198,7 @@ describe('ranked queue', () => {
     expect(room.state.mode).toBe('casual');
     knockOut(room, 1);
     expect((await a.summary).teams[0].delta).toBe(0);
-    expect(store.get(me.profile.id)).toMatchObject({ trophies: 0, wins: 0, battles: 2 });
+    expect((await store.get(me.profile.id))).toMatchObject({ trophies: 0, wins: 0, battles: 2 });
   });
 
   it('reports progress while searching, and sends a bot after the wait', async () => {
@@ -258,7 +259,7 @@ describe('training', () => {
 
     knockOut(room, 1);
     expect((await summary).mode).toBe('training');
-    expect(store.get(me.profile.id)).toMatchObject({ trophies: 0, battles: 1 });
+    expect((await store.get(me.profile.id))).toMatchObject({ trophies: 0, battles: 1 });
 
     const rematch = new Promise<RematchMessage>((resolve) => client.onMessage(MSG.rematch, resolve));
     client.send(MSG.rematch);
@@ -270,7 +271,7 @@ describe('training', () => {
     expect(nextRoom.state.players.get(next.sessionId)!.toJSON()).toMatchObject({ name: 'Trainee', profileId: me.profile.id });
   });
 
-  it('bot decks are legal', () => {
+  it('bot decks are legal', async () => {
     for (const d of BOT_DECKS) expect(isDeck([...d])).toBe(true);
   });
 });

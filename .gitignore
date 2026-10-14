@@ -3,3 +3,5 @@ dist
 .DS_Store
 *.log
 apps/server/data
+.env
+__pycache__/

@@ -4,7 +4,7 @@ import { toScene, dampAngle } from './coords.js';
 import { SnapshotBuffer } from './interp.js';
 import type { Fx } from './fx.js';
 import { PALETTE, teamColor } from './palette.js';
-import { restPose, type Pose, type Rig } from './rigs/kit.js';
+import { restPose, type Pose, type Rig } from './rigs/pose.js';
 import { buildRig } from './rigs/registry.js';
 import { buildTower, type TowerModel } from './towers.js';
 

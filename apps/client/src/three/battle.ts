@@ -36,7 +36,7 @@ import { Fx } from './fx.js';
 import { INTERP_DELAY_MS } from './interp.js';
 import { teamColor } from './palette.js';
 import { buildRig } from './rigs/registry.js';
-import { restPose, type Rig } from './rigs/kit.js';
+import { restPose, type Rig } from './rigs/pose.js';
 import { Stage } from './stage.js';
 import { ProjectileView, TowerView, UNIT_VISUAL_SCALE, UnitView, type FrameCtx } from './views.js';
 

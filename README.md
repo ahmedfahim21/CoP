@@ -4,7 +4,7 @@ A Clash Royale–style 1v1 browser game in 3D. Your king tower is a trainer, you
 
 ## Run it
 
-Requires Node 22.13+ (for the built-in `node:sqlite`) and pnpm 10.
+Requires Node 22+, pnpm 10 and a Supabase project (see [Database](#database)).
 
 ```bash
 pnpm install
@@ -12,9 +12,25 @@ pnpm dev
 ```
 
 - Game: http://localhost:5173 (game server on :2567)
-- Profiles, trophies and match history are stored in SQLite at `apps/server/data/cop.sqlite`; set `COP_DB` to put it elsewhere. Delete the file to reset the ladder.
+- No sign-up: the first visit creates a trainer profile and keeps its credential in the browser's localStorage. **Profile → restore code** moves it to another browser or device.
 - To play ranked against yourself, use two browser profiles (or one normal and one private window): each gets its own trainer profile. Two tabs of the same profile can still be matched, but the battle is unrated. **Create room** gives a friendly invite link.
 - Phones on the same network can join via the "Network" URL Vite prints. The client talks to `<page host>:2567`; set `VITE_SERVER_URL` to point it elsewhere.
+
+## Database
+
+Profiles, trophies and match history live in Supabase. Only the game server touches them, through the `cop_*` SQL functions in `supabase/migrations/`. Row-level security is on and those functions are granted to `service_role` only, so the publishable key can read nothing.
+
+1. Apply the migration: paste `supabase/migrations/20261014120000_profiles.sql` into the Supabase SQL editor, or run `supabase db push` with the CLI linked to your project.
+2. Add the server's settings to the root `.env` (gitignored), from Project Settings → API Keys:
+
+   ```
+   SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_SECRET_KEY=sb_secret_...
+   ```
+
+   `NEXT_PUBLIC_SUPABASE_URL` works in place of `SUPABASE_URL`. The secret key stays on the server; the client never sees it. The server refuses to start without both.
+
+Tests don't need Supabase: they apply the same migration to an in-memory Postgres (PGlite).
 
 ## Test
 
@@ -89,15 +105,16 @@ apps/server       Colyseus rooms and HTTP API.
   BattleRoom        20 Hz authoritative tick, private hands, 20s reconnect window, modes
                     (ranked / friendly / training / casual), bot seat, result recording, rematch
   QueueRoom         ranked queue; pairing rules in matchmaking.ts
-  store.ts          SQLite profiles, ladder and match history (node:sqlite)
+  store.ts          profiles, ladder and match history (Supabase RPC; db.ts is the client)
   api.ts            /api/profiles, /api/profiles/me, /api/profiles/:tag, /api/leaderboard
   sprites.ts        /sprites/trainer/:name proxy
 apps/client       Vite + three.js battle, DOM menus and HUD.
   src/three/        stage (renderer, camera, lights), arena, towers, fx (particles), views,
                     battle (state mirroring), interp (snapshot buffer), diorama (menu arena)
-  src/three/rigs/   kit (rig builder), motion (gaits, gallop, attack curves), species/* (one file per model)
-  src/ui/           home (tabs, deck builder), ladder (ranks, profile), hud (battle overlay + input),
-                    cards, overlays (matchmaking, result), style.css
+  src/three/rigs/   models (glTF loader + Pose-driven clip blending), registry, names
+  src/ui/           boot (loading + title screen), home (tabs, deck builder, card details), ladder
+                    (ranks, profile), hud (battle overlay + input), cards, overlays (matchmaking,
+                    result), icons (Hugeicons + custom), style.css (RetroUI-style tokens)
   src/profile.ts    trainer profile session: credential, server sync, restore
   src/sandbox/      local-simulation animation sandbox (sandbox.html)
 ```
@@ -106,11 +123,23 @@ The server runs `packages/shared/src/sim.ts`; the client never simulates. It ren
 
 ### Characters
 
-Every Pokémon and both trainers are built from primitives (`src/three/rigs/species/*.ts`) as a hierarchy of named joints — legs, arms, head, ears, tail, wings, jaw — so each part animates on its own. All rigs animate from a single `Pose` (time, speed, stride phase, attack/hit/land/faint progress), with shared gaits in `motion.ts` (biped, quadruped, wing flap, attack wind-up curve) and species-specific touches (Pikachu's charging cheeks, Charizard's tail flame, Snorlax's waddle and body slam, Voltorb's swell, Scyther's pirouette, Rapidash's burning mane and tucked-leg leap, Tauros' head-down charge, Gyarados' travelling body wave). Speciality visuals live in `views.ts` (tunnelling mound, cloak fade, paralysis freeze and crackle, frost tint and slow motion, evolution glow and model swap) and `battle.ts` (heal rings, Fire Spin beam, Explosion). To tweak a model, edit its species file; to add one, write a builder and register it in `rigs/registry.ts`.
+Every Pokémon and both trainers are modelled in Blender by script: `tools/blender/rig.py` builds smooth metaball bodies, snaps rigid details (eyes, claws, flames) onto the surface, skins them to a simple rig and bakes the clips (idle, walk, attack, faint, plus special, leap, charge or dormant where a species has them) from Python motion functions. `tools/blender/species/*.py` holds one file per model. Output is Draco-compressed glTF in `apps/client/public/models/` with a `manifest.json`, all committed so the game doesn't need Blender to run.
+
+```bash
+pnpm models                 # rebuild every model (needs Blender; set BLENDER=/path/to/blender if not in /Applications)
+pnpm models pikachu gengar  # rebuild only these
+```
+
+The client blends the baked clips from the same `Pose` the battle always drove (stride phase, attack/hit/faint progress), with procedural squash, rage tremble and glowing parts on top. `gallery.html` shows every model side by side with mode buttons (idle, walk, attack, special, faint); `sandbox.html` runs a local simulation for animation work. Speciality visuals live in `views.ts` and `battle.ts`.
+
+### Card details
+
+`packages/shared/src/cardInfo.ts` derives what the card screen shows from the simulation's own numbers: roles, DPS, a trait line per ability, type matchups (only types that exist in the game) and multipliers against each starter tower. The loading screen's tips come from the same place.
 
 ## Notes
 
-- In-battle models are procedural, so no Pokémon art ships with the game. Card portraits load at runtime from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repo's official artwork; trainer portraits come from Pokémon Showdown through the server proxy because Showdown doesn't send CORS headers. This is a non-commercial fan project; Pokémon is © Nintendo / Game Freak / The Pokémon Company.
+- In-battle models are generated by the Blender scripts in this repo, so no Pokémon art ships with the game. Card portraits load at runtime from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repo's official artwork and the loading screen's Gen III sprites from the same repo; trainer portraits come from Pokémon Showdown through the server proxy because Showdown doesn't send CORS headers. This is a non-commercial fan project; Pokémon is © Nintendo / Game Freak / The Pokémon Company.
+- Icons are [Hugeicons](https://hugeicons.com) stroke-rounded (MIT) plus a few drawn to match in `src/ui/icons.ts` (Poké Ball, elixir, Normal/Psychic/Dragon type marks).
 - `.npmrc` uses `node-linker=hoisted`: Colyseus packages have circular peer dependencies, and pnpm's default layout loads several copies of `@colyseus/core`, which makes every join fail with "seat reservation expired".
 - Server logs every join, play (and rejected play), drop, and match result with the room id, plus queue pairings.
 - Rooms the server creates itself (ranked rooms from the queue, rematch rooms) carry a per-process secret in their options (`trust.ts`), so a client can't create a ranked room or claim someone else's profile through a seat reservation.
