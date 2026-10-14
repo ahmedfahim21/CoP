@@ -140,16 +140,16 @@ export class RanksPanel {
   private render(entries: LeaderboardEntry[], total: number) {
     const me = this.profiles.profile?.id;
     if (entries.length === 0) {
-      this.list.replaceChildren(h('div', { class: 'hint', textContent: 'Nobody is on the ladder yet. Win a ranked battle to take the top spot!' }));
+      this.list.replaceChildren(h('div', { class: 'hint', textContent: 'Nobody is on the ladder yet. Play any battle, even against the bot, to join it!' }));
     } else {
       this.list.replaceChildren(
-        h('div', { class: 'plate-sub ladder-total', textContent: `${total} ranked trainer${total === 1 ? '' : 's'}` }),
+        h('div', { class: 'plate-sub ladder-total', textContent: `${total} trainer${total === 1 ? '' : 's'}` }),
         h('ol', { class: 'ladder-list' }, ...entries.map((e) => {
-          const row = h('li', { class: `ladder-row${e.id === me ? ' me' : ''}${e.rank <= 3 ? ` top${e.rank}` : ''}` },
+          const row = h('li', { class: `ladder-row${e.id === me ? ' me' : ''}${e.rank <= 3 ? ` top${e.rank}` : ''}${e.rated ? '' : ' unrated'}` },
             h('div', { class: 'ladder-rank stroke' }, e.rank <= 3 ? icon(Medal) : null, String(e.rank)),
             h('div', { class: 'ladder-who' },
               h('div', { class: 'plate-name', textContent: e.name }),
-              h('div', { class: 'plate-sub', textContent: `${arenaFor(e.trophies).name} · ${e.wins}W ${e.losses}L` }),
+              h('div', { class: 'plate-sub', textContent: e.rated ? `${arenaFor(e.trophies).name} · ${e.wins}W ${e.losses}L` : `Unrated · ${e.battles} battle${e.battles === 1 ? '' : 's'}` }),
             ),
             trophyPill(e.trophies),
           );
@@ -166,7 +166,7 @@ export class RanksPanel {
     this.footer.replaceChildren(p
       ? h('div', { class: 'ladder-row me' },
         h('div', { class: 'ladder-rank stroke', textContent: p.rank ? String(p.rank) : '—' }),
-        h('div', { class: 'ladder-who' }, h('div', { class: 'plate-name', textContent: `${p.name} (you)` }), h('div', { class: 'plate-sub', textContent: p.rank ? arenaFor(p.trophies).name : 'Play a ranked battle to get ranked' })),
+        h('div', { class: 'ladder-who' }, h('div', { class: 'plate-name', textContent: `${p.name} (you)` }), h('div', { class: 'plate-sub', textContent: p.rank ? arenaFor(p.trophies).name : 'Play any battle to join the ladder' })),
         trophyPill(p.trophies))
       : h('div', { class: 'hint', textContent: this.profiles.status === 'offline' ? 'Offline: your rank shows up once the server is reachable.' : '' }));
   }

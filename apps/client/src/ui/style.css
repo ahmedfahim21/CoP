@@ -177,6 +177,8 @@ h1, h2 { margin: 0; }
 .ladder-row { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 6px 8px; cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
 .ladder-row:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow-md); }
 .ladder-row.me { background: var(--primary); }
+/* On the ladder from bot or friendly battles only: no trophies to show. */
+.ladder-row.unrated .trophies { opacity: 0.45; }
 .ladder-rank { display: flex; align-items: center; justify-content: center; gap: 2px; font-size: 17px; }
 .ladder-rank svg { width: 18px; height: 18px; stroke: var(--ink); stroke-width: 2; }
 .top1 .ladder-rank svg { fill: #ffd84a; } .top2 .ladder-rank svg { fill: #d8e2f0; } .top3 .ladder-rank svg { fill: #e09a5a; }
