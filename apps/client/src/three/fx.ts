@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { litMat } from './style/toon.js';
 import { seeded } from './palette.js';
 
 /**
@@ -284,7 +285,7 @@ export class Fx {
   /** Stone chunks flying out of a destroyed tower. */
   rubble(at: THREE.Vector3, color: number, count = 22, power = 1) {
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(this.debrisGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.9 }));
+      const mesh = new THREE.Mesh(this.debrisGeo, litMat({ color, roughness: 0.9 }));
       const s = 0.8 + this.rnd() * 1.8;
       mesh.userData.s = s;
       mesh.scale.setScalar(s);

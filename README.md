@@ -132,6 +132,17 @@ pnpm models pikachu gengar  # rebuild only these
 
 The client blends the baked clips from the same `Pose` the battle always drove (stride phase, attack/hit/faint progress), with procedural squash, rage tremble and glowing parts on top. `gallery.html` shows every model side by side with mode buttons (idle, walk, attack, special, faint); `sandbox.html` runs a local simulation for animation work. Speciality visuals live in `views.ts` and `battle.ts`.
 
+### Look
+
+The arena follows the concept art: pale stone towers with team-coloured corner cushions and a Poké Ball emblem, the starter (or trainer) sitting in the tower top, a turquoise river with lily pads, plank bridges, cobbled lanes, log palisades, and Poké Ball banners, torches and boulders at each end, with forest all round (`three/arena.ts`, `three/towers.ts`; heavy scenery is instanced).
+
+Rendering is cel-shaded with clean ink outlines, after the sister project sadak (`three/style/`):
+
+- `toon.ts`: every lit surface is a `MeshToonMaterial` with a 2–4 band ramp, patched so shadow bands lean cool instead of just darker. Use `litMat()` wherever you'd reach for `MeshStandardMaterial`; character glTF materials go through `toToon()`.
+- `gba.ts`: the scene renders at one virtual pixel per CSS pixel; one full-screen pass adds outlines from a second difference of reciprocal depth (flat ground never inks, silhouettes always do), a soft highlight shoulder, split tone and saturation, then a reduced palette with a fine ordered dither.
+
+The ramps, shadow-tint patch, ink and split tone are adapted from [sakura-crossing](https://github.com/Kenton-GMI/sakura-crossing) (MIT, © 2026 Kenton Wang) via sadak.
+
 ### Sound
 
 `src/audio/`: every effect is original 8-bit synthesis in WebAudio (`synth.ts`: square/triangle voices and Game Boy–style stepped noise), with a move sound per type, hit sounds by effectiveness, faint, explosions, tower collapses, heal, paralysis, evolution, countdown, crowns, the last-ten-seconds tick and short victory/defeat jingles. Pokémon cries (Gen I) stream at runtime from the [PokeAPI cries](https://github.com/PokeAPI/cries) repo when a Pokémon is deployed, evolves or its card is opened; nothing is committed. A voice limiter (`limiter.ts`) caps simultaneous sounds and drops rapid repeats, sounds pan by screen position, and the speaker button mutes everything (remembered per browser). Audio starts on the title screen's tap, as browsers require.
