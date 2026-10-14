@@ -28,7 +28,7 @@ Profiles, trophies and match history live in Supabase. Only the game server touc
    SUPABASE_SECRET_KEY=sb_secret_...
    ```
 
-   The secret key stays on the server; the client never sees it. The server refuses to start without both.
+   `NEXT_PUBLIC_SUPABASE_URL` works in place of `SUPABASE_URL`. The secret key stays on the server; the client never sees it. The server refuses to start without both.
 
 Tests don't need Supabase: they apply the same migration to an in-memory Postgres (PGlite).
 
