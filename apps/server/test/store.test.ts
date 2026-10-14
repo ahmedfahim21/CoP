@@ -70,8 +70,15 @@ describe('matches', () => {
     await store.recordMatch(ranked(a, a, 0));
     await store.recordMatch(ranked(a, null, 0));
     await store.recordMatch({ ...ranked(a, null, 0), mode: 'training' });
-    expect((await store.get(a))).toMatchObject({ trophies: 0, wins: 0, losses: 0, battles: 5, rank: null });
-    expect((await store.leaderboard()).total).toBe(0);
+    // None of it moves trophies or ranked stats, but every battle counts towards the ladder.
+    expect((await store.get(a))).toMatchObject({ trophies: 0, wins: 0, losses: 0, battles: 5, rank: 1 });
+    expect((await store.get(b))).toMatchObject({ trophies: 0, wins: 0, losses: 0, battles: 1, rank: 2 });
+    const board = await store.leaderboard();
+    expect(board.total).toBe(2);
+    expect(board.entries).toEqual([
+      { rank: 1, id: a, name: 'A', trophies: 0, wins: 0, losses: 0, battles: 5, rated: false },
+      { rank: 2, id: b, name: 'B', trophies: 0, wins: 0, losses: 0, battles: 1, rated: false },
+    ]);
     expect((await store.recentMatches(a))).toHaveLength(5);
   });
 
@@ -109,6 +116,26 @@ describe('concurrency', () => {
 });
 
 describe('leaderboard', () => {
+  it('lists trainers who only fought the bot, with no trophies, below everyone ranked', async () => {
+    const ranked1 = (await store.create('Ranked winner', 1000)).profile.id;
+    const ranked2 = (await store.create('Ranked loser', 1001)).profile.id;
+    const botOnly = (await store.create('Bot fan', 999)).profile.id;
+    const idle = (await store.create('Never played', 998)).profile.id;
+    await store.recordMatch(ranked(ranked1, ranked2, 0));
+    for (let i = 0; i < 3; i++) await store.recordMatch({ ...ranked(botOnly, null, 0), mode: 'training' });
+
+    const board = await store.leaderboard();
+    expect(board.total).toBe(3);
+    expect(board.entries.map((e) => e.id)).toEqual([ranked1, ranked2, botOnly]);
+    expect(board.entries[0]).toMatchObject({ trophies: 30, wins: 1, battles: 1, rated: true });
+    // Lost its only ranked game: still rated, and above the bot-only trainer despite being newer.
+    expect(board.entries[1]).toMatchObject({ trophies: 0, losses: 1, battles: 1, rated: true });
+    expect(board.entries[2]).toEqual({ rank: 3, id: botOnly, name: 'Bot fan', trophies: 0, wins: 0, losses: 0, battles: 3, rated: false });
+    for (const e of board.entries) expect(await store.rankOf(e.id)).toBe(e.rank);
+    // Nobody who hasn't battled is listed or ranked.
+    expect(await store.rankOf(idle)).toBeNull();
+  });
+
   it('orders by trophies, then wins, then who got there first', async () => {
     const ids: string[] = [];
     for (const [i, n] of ['P1', 'P2', 'P3', 'P4'].entries()) ids.push((await store.create(n, 1000 + i)).profile.id);

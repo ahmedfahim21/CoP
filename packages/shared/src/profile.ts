@@ -27,7 +27,7 @@ export interface PublicProfile extends ProfileStats {
   id: string;
   name: string;
   createdAt: number;
-  /** Ladder position, or null before the first ranked battle. */
+  /** Ladder position, or null before the first battle of any kind. */
   rank: number | null;
 }
 
@@ -79,6 +79,10 @@ export interface LeaderboardEntry {
   trophies: number;
   wins: number;
   losses: number;
+  /** Battles of every kind, bot and friendly included. */
+  battles: number;
+  /** Has played ranked; otherwise on the ladder with no trophies from bot or friendly battles. */
+  rated: boolean;
 }
 
 export interface LeaderboardResponse {

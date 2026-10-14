@@ -142,7 +142,7 @@ export class ProfileStore {
     return this.db.call('cop_leaderboard', { p_limit: limit, p_offset: offset });
   }
 
-  /** 1-based ladder position, or null before a first ranked battle. */
+  /** 1-based ladder position, or null before a first battle. */
   async rankOf(id: string): Promise<number | null> {
     return (await this.stored(id))?.rank ?? null;
   }
