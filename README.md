@@ -41,7 +41,25 @@ The client is a static Vite build; the game server is a long-running Node proces
 - `VITE_SERVER_URL` — the game server's public URL, e.g. `https://cop-server.fly.dev` (required: a Vercel build fails without it).
 - `SITE_URL` — optional; defaults to the project's production domain, used for the canonical and Open Graph URLs.
 
-**Game server elsewhere.** Vercel's WebSockets (public beta) cap a connection at the function's run time and pin it to one instance with no shared state, while Colyseus keeps every room — the ranked queue and each battle's tick — in one process and matches over HTTP before joining over WebSocket. Run `pnpm --filter @cop/server start` on a host with a persistent process and WebSockets (Fly.io, Railway, Render, a VPS) with `PORT`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` set. The API allows any origin and authenticates with a bearer token, so the Vercel domain needs no extra configuration.
+**Game server on AWS (EC2).** Vercel's WebSockets (public beta) cap a connection at the function's run time and pin it to one instance with no shared state, while Colyseus keeps every room — the ranked queue and each battle's 20 Hz tick — in one process and matches over HTTP before joining over WebSocket. So the server runs as one long-lived container on a small EC2 instance (`t4g.small`, ~$12–15/month), behind Caddy for automatic HTTPS and WebSocket proxying. Everything is in `deploy/aws/`:
+
+- `apps/server/Dockerfile` — the server image (server + shared rules only).
+- `docker-compose.yml`, `Caddyfile` — server + Caddy; Caddy gets a Let's Encrypt certificate for `DOMAIN`.
+- `bootstrap.sh` — EC2 user data: installs Docker, clones the repo at `GIT_REF`, starts the stack.
+- `update.sh` — redeploy on the instance; reads secrets from SSM Parameter Store into a root-only `.env`.
+- `provision.sh` — one-time setup with the AWS CLI: SSM parameters (secret key encrypted), an instance role that can read only those, a security group open on 80/443 (no SSH; shell is Session Manager), the instance and an Elastic IP.
+
+You need: an AWS account with the CLI configured (`aws configure`), and a hostname you control for the server (e.g. `api.yourgame.com`).
+
+1. Provision (once — re-running launches another instance):
+   ```bash
+   DOMAIN=api.yourgame.com SUPABASE_URL=https://xyz.supabase.co SUPABASE_SECRET_KEY=sb_secret_... GIT_REF=main deploy/aws/provision.sh
+   ```
+2. Add the printed DNS record: `A api.yourgame.com → <Elastic IP>`.
+3. After the first build (~5 minutes), check it end to end: `pnpm smoke https://api.yourgame.com` (health, API → Supabase, and a real training battle over `wss`, as a guest so nothing is recorded).
+4. In Vercel set `VITE_SERVER_URL=https://api.yourgame.com` and redeploy the client.
+
+Redeploy after pushing: `aws ssm start-session --target <instance-id>`, then `sudo /opt/cop/deploy/aws/update.sh [git-ref]`. Logs: `sudo docker compose -f /opt/cop/deploy/aws/docker-compose.yml logs -f server`. Locally, the same stack runs with `DOMAIN=localhost docker compose up -d --build` in `deploy/aws` (with a `.env` holding the two Supabase values) and `NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm smoke https://localhost`.
 
 Icons and the Open Graph card are rendered from `tools/brand/` with headless Chrome: `pnpm brand` regenerates them into `apps/client/public`.
 

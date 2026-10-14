@@ -1,0 +1,14 @@
+# The server image needs the workspace manifests, shared rules and server source only.
+**/node_modules
+**/dist
+.git
+.claude
+.env
+**/.env
+tools
+supabase
+deploy
+apps/client/*
+!apps/client/package.json
+apps/server/test
+apps/server/scripts
