@@ -3,9 +3,9 @@ import { inRiver, mirror, onBridgeColumn, type Team } from './arena.js';
 import { CARDS } from './cards.js';
 import {
   COUNTDOWN_SECONDS, ELIXIR_MAX, ELIXIR_START, OVERTIME_SECONDS, REGULAR_SECONDS,
-  canTarget, createMatch, forfeit, openPockets, playCard, step,
+  canTarget, createMatch, forfeit, openPockets, playCard, statsOf, step,
 } from './sim.js';
-import { DT, PICKS, onlyUnits, runUntil, spawn, started, tower } from './testing.js';
+import { DT, PICKS, onlyUnits, run, runUntil, spawn, started, tower } from './testing.js';
 
 describe('createMatch', () => {
   it('sets up towers, hands and elixir for both players', () => {
@@ -187,6 +187,38 @@ describe('movement', () => {
       crossed = machop!.y < 15;
     }
     expect(crossed).toBe(true);
+  });
+
+  it('walks around a tower that stands in its way instead of getting stuck behind it', () => {
+    // Directly behind the left princess tower, on the straight line to the left bridge.
+    const s = started();
+    const [machop] = spawn(s, 0, 'machop', { x: 3.5, y: 28.6 });
+    const t = tower(s, 0, 'princess', 'left');
+    expect(t.x).toBe(3.5);
+    // Machop walks 1 tile/s after a 1s deploy; going around costs a couple of tiles.
+    run(s, 9);
+    expect(machop!.y).toBeLessThan(t.y - 2);
+  });
+
+  it('walks around its own king tower too', () => {
+    const s = started();
+    // Dead centre behind the king, as far back as deploys go.
+    const [machop] = spawn(s, 0, 'machop', { x: 9, y: 31.4 });
+    run(s, 10);
+    expect(machop!.y).toBeLessThan(25);
+  });
+
+  it('never steps inside a tower while going around it', () => {
+    const s = started();
+    const [machop] = spawn(s, 0, 'machop', { x: 3.5, y: 28.6 });
+    const towers = s.entities.filter((e) => e.kind !== 'unit');
+    for (let i = 0; i < 180; i++) {
+      step(s, DT);
+      for (const t of towers) {
+        if (t.hp <= 0) continue;
+        expect(Math.hypot(machop!.x - t.x, machop!.y - t.y)).toBeGreaterThanOrEqual(statsOf(t).radius + statsOf(machop!).radius - 1e-6);
+      }
+    }
   });
 
   it('flying units go straight over the river', () => {

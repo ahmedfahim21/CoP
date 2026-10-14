@@ -9,7 +9,8 @@ import { DT, PICKS, keepUnits, spawn, started } from './testing.js';
 function playOut(s: MatchState, players: [((s: MatchState) => ReturnType<Bot['update']>) | null, ((s: MatchState) => ReturnType<Bot['update']>) | null]) {
   let rejected = 0;
   let plays = 0;
-  for (let t = 0; t < REGULAR_SECONDS + OVERTIME_SECONDS + 5 && s.phase !== 'ended'; t += DT) {
+  let t = 0;
+  for (; t < REGULAR_SECONDS + OVERTIME_SECONDS + 5 && s.phase !== 'ended'; t += DT) {
     for (const team of [0, 1] as const) {
       const play = players[team]?.(s);
       if (!play) continue;
@@ -19,17 +20,21 @@ function playOut(s: MatchState, players: [((s: MatchState) => ReturnType<Bot['up
     }
     step(s, DT);
   }
-  return { rejected, plays };
+  return { rejected, plays, seconds: t };
 }
 
 describe('bot', () => {
   it.each([1, 2, 3])('beats an idle opponent and never sends an illegal play (seed %s)', (seed) => {
     const s = started(seed);
     const bot = new Bot(1, seededRandom(seed));
-    const { rejected, plays } = playOut(s, [null, (m) => bot.update(m, DT)]);
+    const { rejected, plays, seconds } = playOut(s, [null, (m) => bot.update(m, DT)]);
     expect(rejected).toBe(0);
-    expect(plays).toBeGreaterThan(5);
+    expect(plays).toBeGreaterThanOrEqual(3);
     expect(s.result?.winner).toBe(1);
+    // Troops walk around towers instead of stalling behind them, so an undefended side falls
+    // fast: three crowns well inside regulation (it took ~175s when they got stuck).
+    expect(s.players[1].crowns).toBe(3);
+    expect(seconds).toBeLessThan(120);
   });
 
   it('wins most matches against a random player, from either side', () => {
