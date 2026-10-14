@@ -1,4 +1,4 @@
-import { Crown, Trophy } from 'lucide';
+import { Crown, Trophy } from './icons.js';
 import { CARDS, ELIXIR_MAX, type CardId, type ErrorMessage, type HandMessage, type Point, type Team } from '@cop/shared';
 import type { Session } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';

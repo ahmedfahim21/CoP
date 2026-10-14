@@ -13,7 +13,7 @@
   "dependencies": {
     "@colyseus/sdk": "^0.18.5",
     "@cop/shared": "workspace:*",
-    "lucide": "^1.55.0",
+    "@hugeicons/core-free-icons": "4.3.5",
     "three": "0.186.1"
   },
   "devDependencies": {

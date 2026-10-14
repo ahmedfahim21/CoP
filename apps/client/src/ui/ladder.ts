@@ -1,4 +1,4 @@
-import { Bot, Copy, Crown, Flame, KeyRound, Medal, RefreshCw, Swords, Trophy, Users } from 'lucide';
+import { Bot, Copy, Crown, Flame, Key, Medal, Refresh, Swords, Trophy, Users } from './icons.js';
 import {
   arenaFor, nextArena, winRate,
   type LeaderboardEntry, type MatchRecord, type ProfileStats, type PublicProfile,
@@ -111,7 +111,7 @@ export class RanksPanel {
   private loading = false;
 
   constructor(private readonly profiles: ProfileSession) {
-    const refresh = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Refresh leaderboard' } }, icon(RefreshCw));
+    const refresh = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Refresh leaderboard' } }, icon(Refresh));
     refresh.addEventListener('click', () => void this.load());
     this.el.append(
       h('div', { class: 'deck-head' }, h('h2', { textContent: 'Kanto Ladder' }), refresh),
@@ -184,7 +184,7 @@ export class ProfilePanel {
   private render() {
     const { profile, status } = this.profiles;
     if (!profile) {
-      const retry = h('button', { class: 'btn small' }, icon(RefreshCw, 'btn-icon'), ' Retry');
+      const retry = h('button', { class: 'btn small' }, icon(Refresh, 'btn-icon'), ' Retry');
       retry.addEventListener('click', () => void this.profiles.connect());
       this.el.replaceChildren(
         h('h2', { textContent: 'Trainer Profile' }),
@@ -240,7 +240,7 @@ export class ProfilePanel {
       });
     }
     return h('div', { class: 'panel' },
-      h('div', { class: 'panel-title stroke' }, icon(KeyRound), 'Restore code'),
+      h('div', { class: 'panel-title stroke' }, icon(Key), 'Restore code'),
       h('div', { class: 'hint left', textContent: 'Your restore code is the key to this profile. Copy it somewhere safe to play on another device or after clearing your browser. Never share it.' }),
       copy ? h('div', { class: 'row' }, copy) : null,
       h('div', { class: 'row' }, input, use),
