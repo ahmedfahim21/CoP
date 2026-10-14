@@ -1,5 +1,5 @@
 import { Crown, Trophy } from './icons.js';
-import { CARDS, ELIXIR_MAX, type CardId, type ErrorMessage, type HandMessage, type Point, type Team } from '@cop/shared';
+import { CARDS, ELIXIR_MAX, rulesFor, type CardId, type ErrorMessage, type HandMessage, type MatchMode, type Point, type Team } from '@cop/shared';
 import type { Session } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';
 import { cardEl, setCard } from './cards.js';
@@ -280,12 +280,11 @@ export class BattleHud {
   private tick() {
     const s = this.session.state;
     // Timer.
-    const t = Math.max(0, Math.ceil(s.timeLeft));
-    if (s.phase === 'countdown' || s.phase === 'waiting') {
-      this.timerValue.textContent = '3:00';
-    } else {
-      this.timerValue.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-    }
+    // Before the start, show the full clock for this mode (training is shorter).
+    const t = s.phase === 'countdown' || s.phase === 'waiting'
+      ? rulesFor(s.mode as MatchMode).regularSeconds
+      : Math.max(0, Math.ceil(s.timeLeft));
+    this.timerValue.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
     this.timerLabel.textContent = s.phase === 'overtime' ? 'Overtime' : 'Time left';
     this.timerBox.classList.toggle('urgent', (s.phase === 'regular' || s.phase === 'overtime') && t <= 10);
 
@@ -351,7 +350,14 @@ export class BattleHud {
     this.elixirNum.textContent = String(Math.floor(elixir));
     this.elixir.classList.toggle('double', s.doubleElixir);
     this.elixir.classList.toggle('full', elixir >= ELIXIR_MAX - 0.01);
-    this.cards.forEach((c, i) => c.classList.toggle('unaffordable', !this.usable(i) && this.selected !== i));
+    this.cards.forEach((c, i) => {
+      const id = this.hand?.hand[i];
+      const ready = this.usable(i);
+      c.classList.toggle('ready', ready);
+      c.classList.toggle('unaffordable', !ready && this.selected !== i);
+      // How close the card is to playable: a pink fill rises up it as elixir builds.
+      if (id) c.style.setProperty('--charge', String(Math.min(1, elixir / CARDS[id].cost)));
+    });
     if (this.selected !== null && !this.usable(this.selected) && !this.dragging) this.deselect();
   }
 

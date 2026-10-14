@@ -3,7 +3,7 @@ import { inRiver, mirror, onBridgeColumn, type Team } from './arena.js';
 import { CARDS } from './cards.js';
 import {
   COUNTDOWN_SECONDS, ELIXIR_MAX, ELIXIR_START, OVERTIME_SECONDS, REGULAR_SECONDS,
-  canTarget, createMatch, forfeit, openPockets, playCard, statsOf, step,
+  QUICK_RULES, STANDARD_RULES, canTarget, createMatch, forfeit, isDoubleElixir, openPockets, playCard, rulesFor, statsOf, step,
 } from './sim.js';
 import { DT, PICKS, onlyUnits, run, runUntil, spawn, started, tower } from './testing.js';
 
@@ -392,3 +392,39 @@ describe('soak', () => {
     expect(s.result).not.toBeNull();
   });
 });
+
+describe('match rules', () => {
+  const towers = (s: ReturnType<typeof createMatch>) => s.entities.filter((e) => e.kind !== 'unit').map((e) => [e.kind, e.hp, e.maxHp]);
+
+  it('training uses the quick rules; every other mode the standard ones', () => {
+    expect(rulesFor('training')).toBe(QUICK_RULES);
+    for (const mode of ['ranked', 'friendly', 'casual'] as const) expect(rulesFor(mode)).toBe(STANDARD_RULES);
+  });
+
+  it('standard matches keep full-health towers and the 3:00 clock', () => {
+    const s = createMatch(PICKS, 1);
+    for (const [kind, hp, max] of towers(s)) expect([hp, max]).toEqual(kind === 'king' ? [4000, 4000] : [2500, 2500]);
+    for (let t = 0; t <= COUNTDOWN_SECONDS; t += DT) step(s, DT);
+    expect(s.phase).toBe('regular');
+    expect(s.timeLeft).toBeCloseTo(REGULAR_SECONDS, 0);
+  });
+
+  it('quick matches: towers at 60%, a 2:00 clock, double elixir after 30s, 0:30 overtime', () => {
+    const s = createMatch(PICKS, 1, undefined, QUICK_RULES);
+    for (const [kind, hp, max] of towers(s)) expect([hp, max]).toEqual(kind === 'king' ? [2400, 2400] : [1500, 1500]);
+    for (let t = 0; t <= COUNTDOWN_SECONDS; t += DT) step(s, DT);
+    expect(s.timeLeft).toBeCloseTo(120, 0);
+
+    const runFor = (seconds: number) => { for (let t = 0; t < seconds - DT / 2; t += DT) step(s, DT); };
+    runFor(29);
+    expect(isDoubleElixir(s)).toBe(false);
+    runFor(2);
+    expect(isDoubleElixir(s)).toBe(true);
+
+    // No crowns by full time: overtime is 30 seconds.
+    runFor(s.timeLeft + DT);
+    expect(s.phase).toBe('overtime');
+    expect(s.timeLeft).toBeCloseTo(30, 0);
+  });
+});
+

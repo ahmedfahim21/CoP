@@ -6,6 +6,7 @@ import {
 import { CARDS, DEFAULT_DECK, FORMS, unitStats, type Ability, type CardId, type CombatStats, type FormId, type UnitId } from './cards.js';
 import { STARTERS, TRAINER, type StarterId, type StarterPick } from './starters.js';
 import { effectivenessLabel, typeMultiplier, type Effectiveness, type PokeType } from './types.js';
+import type { MatchMode } from './profile.js';
 
 export const COUNTDOWN_SECONDS = 3;
 export const REGULAR_SECONDS = 180;
@@ -14,6 +15,27 @@ export const DOUBLE_ELIXIR_AT = 60;
 export const ELIXIR_START = 5;
 export const ELIXIR_MAX = 10;
 export const ELIXIR_PER_SECOND = 1 / 2.8;
+
+/** The clock and tower health a match is played with. */
+export interface MatchRules {
+  regularSeconds: number;
+  overtimeSeconds: number;
+  /** Double elixir starts when this many regular seconds are left (and lasts through overtime). */
+  doubleElixirAt: number;
+  /** Multiplies every tower's health. */
+  towerHpScale: number;
+}
+
+export const STANDARD_RULES: MatchRules = {
+  regularSeconds: REGULAR_SECONDS, overtimeSeconds: OVERTIME_SECONDS, doubleElixirAt: DOUBLE_ELIXIR_AT, towerHpScale: 1,
+};
+
+/** Training against the bot: 2:00 with double elixir after 30 seconds, 0:30 overtime, towers at 60%. */
+export const QUICK_RULES: MatchRules = { regularSeconds: 120, overtimeSeconds: 30, doubleElixirAt: 90, towerHpScale: 0.6 };
+
+export function rulesFor(mode: MatchMode): MatchRules {
+  return mode === 'training' ? QUICK_RULES : STANDARD_RULES;
+}
 export const DEPLOY_SECONDS = 1;
 export const HAND_SIZE = 4;
 
@@ -146,6 +168,7 @@ export interface MatchState {
   result: MatchResult | null;
   /** Events produced by the most recent step/playCard; cleared at the start of each step. */
   events: GameEvent[];
+  rules: MatchRules;
 }
 
 export function statsOf(e: Pick<Entity, 'kind' | 'defId'>): CombatStats {
@@ -204,7 +227,10 @@ function addEntity(state: MatchState, seed: EntitySeed): Entity {
   return e;
 }
 
-export function createMatch(starters: [StarterPick, StarterPick], seed: number, decks: [readonly CardId[], readonly CardId[]] = [DEFAULT_DECK, DEFAULT_DECK]): MatchState {
+export function createMatch(
+  starters: [StarterPick, StarterPick], seed: number,
+  decks: [readonly CardId[], readonly CardId[]] = [DEFAULT_DECK, DEFAULT_DECK], rules: MatchRules = STANDARD_RULES,
+): MatchState {
   const state: MatchState = {
     phase: 'countdown',
     timeLeft: COUNTDOWN_SECONDS,
@@ -216,6 +242,7 @@ export function createMatch(starters: [StarterPick, StarterPick], seed: number, 
     players: [emptyPlayer(starters[0]), emptyPlayer(starters[1])],
     result: null,
     events: [],
+    rules,
   };
   for (const team of [0, 1] as const) {
     const deck = shuffled(state, decks[team]);
@@ -229,6 +256,7 @@ export function createMatch(starters: [StarterPick, StarterPick], seed: number, 
       addEntity(state, { team, kind: 'princess', defId: starters[team][i]!, ...p, deployTimer: 0, active: true, lane });
     });
   }
+  for (const t of state.entities) t.hp = t.maxHp = Math.round(t.maxHp * rules.towerHpScale);
   return state;
 }
 
@@ -318,7 +346,7 @@ export function step(state: MatchState, dt: number): void {
     state.timeLeft -= dt;
     if (state.timeLeft <= 0) {
       state.phase = 'regular';
-      state.timeLeft = REGULAR_SECONDS;
+      state.timeLeft = state.rules.regularSeconds;
     }
     return;
   }
@@ -366,7 +394,7 @@ export function step(state: MatchState, dt: number): void {
 }
 
 export function isDoubleElixir(state: MatchState): boolean {
-  return state.phase === 'overtime' || (state.phase === 'regular' && state.timeLeft <= DOUBLE_ELIXIR_AT);
+  return state.phase === 'overtime' || (state.phase === 'regular' && state.timeLeft <= state.rules.doubleElixirAt);
 }
 
 function onDeployed(state: MatchState, e: Entity) {
@@ -942,7 +970,7 @@ function endOfPhase(state: MatchState): void {
   if (a.crowns !== b.crowns) return endWithCrowns(state, 'crowns');
   if (state.phase === 'regular') {
     state.phase = 'overtime';
-    state.timeLeft = OVERTIME_SECONDS;
+    state.timeLeft = state.rules.overtimeSeconds;
     return;
   }
   // Overtime ran out with equal crowns: the side whose weakest tower is healthier wins.

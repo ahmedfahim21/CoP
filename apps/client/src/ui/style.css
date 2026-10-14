@@ -469,18 +469,34 @@ h1, h2 { margin: 0; }
 .next .card-cost { transform: scale(0.75); top: -12px; left: -12px; }
 .hand { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-items: end; }
 .hand .card { touch-action: none; }
-.hand .card.unaffordable { filter: grayscale(1); opacity: 0.6; }
+.hand .card { transition: transform 140ms ease-out, box-shadow 140ms; }
+/* Playable now: lifted, ringed in elixir pink. */
+.hand .card.ready { transform: translateY(-5px); box-shadow: var(--shadow), 0 0 0 3px var(--elixir), 0 0 16px 2px rgba(255, 48, 205, 0.55); }
+.hand .card.ready .card-cost .drop::before { box-shadow: inset 3px 3px 0 var(--elixir-hi), 0 0 10px 2px rgba(255, 48, 205, 0.7); }
+/* Not yet: greyed out, with elixir filling up the card as it builds toward the cost. */
+.hand .card.unaffordable .card-art { filter: grayscale(1) brightness(0.72); }
+.hand .card.unaffordable { background: var(--muted-bg); }
+.hand .card.unaffordable::after {
+  content: ''; position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1; pointer-events: none;
+  height: calc((100% - 8px) * var(--charge, 0));
+  background: linear-gradient(rgba(255, 138, 230, 0.55), rgba(255, 48, 205, 0.45));
+  border-top: 2px solid var(--elixir);
+  transition: height 120ms linear;
+}
+.hand .card.unaffordable .card-cost .drop::before { background: #8a8a8a; box-shadow: none; }
 .hand .card.selected { transform: translate(-2px, -14px); box-shadow: var(--shadow-lg); outline: 3px solid var(--pink); outline-offset: 2px; }
 .hand .card.dragging { opacity: 0.35; }
 .hand .card.enter { animation: card-in 320ms cubic-bezier(.2,1.4,.4,1); }
 @keyframes card-in { from { transform: translateY(40px) scale(0.6); opacity: 0; } }
 
 .elixir { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
-.elixir-bar { position: relative; flex: 1; height: 24px; border: 2px solid var(--ink); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
-.elixir-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--elixir); transition: width 90ms linear; }
+.elixir .drop.big { width: 50px; height: 50px; }
+.elixir .drop.big span { font-size: 24px; margin-top: 5px; }
+.elixir-bar { position: relative; flex: 1; height: 32px; border: 3px solid var(--ink); background: #3a1442; box-shadow: var(--shadow-md); overflow: hidden; }
+.elixir-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(var(--elixir-hi), var(--elixir) 45%, #c4199c); box-shadow: 0 0 12px 2px rgba(255, 48, 205, 0.6); transition: width 90ms linear; }
 .elixir-fill::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--elixir-hi); }
 .elixir-ticks { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(10, 1fr); }
-.elixir-ticks i { border-right: 2px solid var(--ink); }
+.elixir-ticks i { border-right: 2px solid rgba(0, 0, 0, 0.55); }
 .elixir-ticks i:last-child { border-right: 0; }
 .elixir.double .elixir-fill { background: repeating-linear-gradient(135deg, var(--elixir) 0 8px, #ff6be0 8px 16px); }
 .elixir.full .elixir-fill { animation: full-glow 0.9s ease-in-out infinite alternate; }
