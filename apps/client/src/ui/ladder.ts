@@ -58,7 +58,7 @@ function matchList(matches: MatchRecord[]): HTMLElement {
       h('div', { class: 'match-outcome stroke', textContent: m.outcome === 'win' ? 'Win' : m.outcome === 'loss' ? 'Loss' : 'Draw' }),
       h('div', { class: 'match-who' },
         h('div', { class: 'plate-name', textContent: m.opponent.name }),
-        h('div', { class: 'plate-sub', textContent: `${MODE_LABEL[m.mode]} · ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` }),
+        h('div', { class: 'plate-sub', textContent: `${MODE_LABEL[m.mode]}${m.reason === 'tiebreak' ? ' · Tower health' : ''} · ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` }),
       ),
       h('div', { class: 'match-crowns stroke' }, icon(Crown), `${m.crowns}–${m.opponentCrowns}`),
       m.mode === 'ranked' ? deltaPill(m.delta) : h('div', { class: 'delta' }, icon(m.opponent.id ? Users : Bot)),

@@ -68,6 +68,8 @@ export interface ResultInfo {
   myCrowns: number;
   foeCrowns: number;
   reason: string;
+  /** Each side's weakest standing tower, 0..1: shown when the tiebreak decided it. */
+  towerHealth: { mine: number; foe: number } | null;
   /** Ranked: queue again. Otherwise: ask for a rematch in a fresh room. */
   onAgain(): void;
   onMenu(): void;
@@ -76,7 +78,7 @@ export interface ResultInfo {
 const REASONS: Record<string, string> = {
   king: 'The trainer was defeated!',
   crowns: 'Decided on crowns.',
-  tiebreak: 'Tiebreak on tower health.',
+  tiebreak: 'Crowns were level after overtime, so the healthier weakest tower wins.',
   draw: 'Nobody could break through.',
   forfeit: 'A trainer left the battle.',
 };
@@ -123,8 +125,13 @@ export class ResultScreen {
     menu.addEventListener('click', r.onMenu);
     this.el = h('div', { class: 'result' },
       side('foe'),
-      h('h2', { textContent: r.winner === 'draw' ? 'Draw' : r.winner === 'me' ? 'Victory!' : 'Defeat' }),
+      h('h2', { textContent: heading(r) }),
       side('me'),
+      r.reason === 'tiebreak' && r.towerHealth
+        ? h('div', { class: 'tiebreak' },
+          h('div', { class: 'tiebreak-row' }, h('span', { textContent: 'Your weakest tower' }), h('span', { class: 'tiebreak-val stroke', textContent: pct(r.towerHealth.mine) })),
+          h('div', { class: 'tiebreak-row' }, h('span', { textContent: "Rival's weakest tower" }), h('span', { class: 'tiebreak-val stroke', textContent: pct(r.towerHealth.foe) })))
+        : null,
       h('div', { class: 'reason', textContent: [REASONS[r.reason] ?? '', MODE_NOTE[r.mode]].filter(Boolean).join(' ') }),
       this.statsEl,
       h('div', { class: 'actions' }, menu, this.again),
@@ -169,3 +176,12 @@ export class ResultScreen {
     }
   }
 }
+
+/** The result's headline; a tiebreak says so outright, since the crowns look level. */
+function heading(r: ResultInfo): string {
+  if (r.winner === 'draw') return 'Draw';
+  if (r.reason === 'tiebreak') return r.winner === 'me' ? 'Won on tower health' : 'Lost on tower health';
+  return r.winner === 'me' ? 'Victory!' : 'Defeat';
+}
+
+const pct = (v: number) => `${Math.round(v * 100)}%`;
