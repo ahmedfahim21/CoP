@@ -39,6 +39,15 @@ export function quietTowers(s: MatchState) {
 
 export const SCENARIOS: Scenario[] = [
   {
+    id: 'flight', title: 'Fly over', view: 0,
+    note: 'Fliers deployed behind their own towers climb over them instead of flying through.',
+    setup(s) {
+      place(s, 0, 'charizard', { x: 3.5, y: 28.6 }, { ready: true });
+      place(s, 0, 'zubat', { x: 9, y: 31.2 }, { ready: true });
+      place(s, 0, 'articuno', { x: 14.5, y: 28.6 }, { ready: true });
+    },
+  },
+  {
     id: 'moves', title: 'Ranged moves', view: 0,
     note: 'Thunderbolt, Ice Beam, Swift, Psybeam and Thunder Shock across the river, while the starter towers trade Water Gun, Ember and Razor Leaf.',
     setup(s) {
