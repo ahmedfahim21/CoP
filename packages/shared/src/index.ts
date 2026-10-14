@@ -7,3 +7,4 @@ export * from './protocol.js';
 export * from './ranking.js';
 export * from './profile.js';
 export * from './bot.js';
+export * from './cardInfo.js';
