@@ -32,6 +32,19 @@ Profiles, trophies and match history live in Supabase. Only the game server touc
 
 Tests don't need Supabase: they apply the same migration to an in-memory Postgres (PGlite).
 
+## Deploy
+
+The client is a static Vite build; the game server is a long-running Node process holding a WebSocket per battle with a 20 Hz tick, so they deploy separately.
+
+**Client on Vercel.** `vercel.json` builds only the client (`pnpm --filter @cop/client build` → `apps/client/dist`) with long-lived caching for hashed assets. Import the repo with the root as the project directory and set:
+
+- `VITE_SERVER_URL` — the game server's public URL, e.g. `https://cop-server.fly.dev` (required: a Vercel build fails without it).
+- `SITE_URL` — optional; defaults to the project's production domain, used for the canonical and Open Graph URLs.
+
+**Game server elsewhere.** Vercel's WebSockets (public beta) cap a connection at the function's run time and pin it to one instance with no shared state, while Colyseus keeps every room — the ranked queue and each battle's tick — in one process and matches over HTTP before joining over WebSocket. Run `pnpm --filter @cop/server start` on a host with a persistent process and WebSockets (Fly.io, Railway, Render, a VPS) with `PORT`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` set. The API allows any origin and authenticates with a bearer token, so the Vercel domain needs no extra configuration.
+
+Icons and the Open Graph card are rendered from `tools/brand/` with headless Chrome: `pnpm brand` regenerates them into `apps/client/public`.
+
 ## Test
 
 ```bash

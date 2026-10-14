@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { DRACOLoader, DRACO_GLTF_CONFIG } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AttackStyle, Pose, Rig } from './pose.js';
@@ -29,8 +29,8 @@ export async function loadModels(onProgress?: (done: number, total: number, name
   const manifest = (await res.json()) as Record<string, ModelInfo>;
   const names = Object.keys(manifest);
   onManifest?.(names);
-  // Models are Draco-compressed; the decoder is three's own, vendored into public/draco.
-  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+  // Models are Draco-compressed; three bundles its glTF decoder, so Vite ships it with hashed names.
+  const draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG);
   const loader = new GLTFLoader().setDRACOLoader(draco);
   let done = 0;
   await Promise.all(names.map(async (name) => {
