@@ -213,6 +213,7 @@ h1, h2 { margin: 0; }
 
 .deck-head { display: flex; align-items: center; justify-content: space-between; }
 .avg { display: flex; align-items: center; gap: 8px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 3px 10px 3px 4px; font-size: 15px; }
+.avg .drop span { font-size: 10px; -webkit-text-stroke: 2.5px var(--ink); }
 .deck-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .deck-grid.swapping .card { animation: wiggle 0.5s ease-in-out infinite alternate; }
 .deck-grid.swapping .card:nth-child(2n) { animation-delay: -0.25s; }
@@ -332,8 +333,14 @@ h1, h2 { margin: 0; }
 .mini-art { width: 30px; height: 30px; flex: none; background: var(--card); border: 1.5px solid var(--ink); display: grid; place-items: center; overflow: hidden; }
 .mini-art img { width: 130%; height: 130%; object-fit: contain; }
 .tower-matchups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tower-matchup { display: flex; align-items: center; gap: 5px; border: 2px solid var(--ink); background: var(--bg); padding: 3px; }
+.tower-matchup { display: flex; align-items: center; gap: 5px; border: 2px solid var(--ink); background: var(--bg); padding: 3px; min-width: 0; }
 .tower-mults { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A third of a phone is too narrow for portrait and labels side by side: stack them. */
+@media (max-width: 460px) {
+  .tower-matchup { flex-direction: column; padding: 4px 3px; }
+  .tower-mults { align-items: stretch; width: 100%; }
+  .mult { text-align: center; }
+}
 .mult { font-family: var(--head); font-size: 10px; white-space: nowrap; border: 1.5px solid var(--ink); padding: 0 4px 1px; background: var(--card); }
 .mult.good { background: #d9fbe3; color: var(--win); } .mult.bad { background: #ffe0e2; color: var(--destructive); }
 .modal-actions { position: sticky; bottom: 0; background: var(--card); padding: 8px 0 14px; }
