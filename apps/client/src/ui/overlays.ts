@@ -1,9 +1,17 @@
-import { Crown, Copy, Swords } from 'lucide';
+import { Bot, Copy, Crown, Dumbbell, Swords, Trophy, Users } from 'lucide';
+import type { BattleStats, MatchMode, QueueStatusMessage, RematchStateMessage, SummaryMessage, Team } from '@cop/shared';
 import { h, icon } from './dom.js';
 import { avatar } from './home.js';
+import { deltaPill } from './ladder.js';
+
+export interface MatchmakingOverlay {
+  el: HTMLDivElement;
+  /** Ranked search progress from the queue. */
+  setStatus(s: QueueStatusMessage): void;
+}
 
 /** Full-screen "searching" / "waiting for friend" overlay. */
-export function matchmakingOverlay(opts: { code: string | null; joining?: boolean; onCancel(): void }): HTMLDivElement {
+export function matchmakingOverlay(opts: { code: string | null; joining?: boolean; ranked?: boolean; onCancel(): void; onTraining?(): void }): MatchmakingOverlay {
   const cancel = h('button', { class: 'btn small' }, 'Cancel');
   cancel.addEventListener('click', opts.onCancel);
   let invite: HTMLElement | null = null;
@@ -16,26 +24,50 @@ export function matchmakingOverlay(opts: { code: string | null; joining?: boolea
     });
     invite = h('div', { class: 'mm-box' }, h('div', { class: 'stroke', textContent: 'Room code' }), h('div', { class: 'code stroke', textContent: opts.code }), copy);
   }
-  const title = opts.joining ? 'Joining room' : opts.code ? 'Friendly battle' : 'Finding opponent';
+  const status = h('div', { class: 'mm-status', hidden: true });
+  let train: HTMLButtonElement | null = null;
+  if (opts.onTraining) {
+    train = h('button', { class: 'btn purple small' }, icon(Dumbbell, 'btn-icon'), ' Practice vs bot instead');
+    train.addEventListener('click', opts.onTraining);
+  }
+  const title = opts.joining ? 'Joining room' : opts.code ? 'Friendly battle' : opts.ranked ? 'Ranked battle' : 'Finding opponent';
   const sub = opts.joining ? 'Connecting' : opts.code ? 'Waiting for your friend' : 'Searching for a trainer';
-  return h('div', { class: 'mm' },
+  const el = h('div', { class: 'mm' },
     h('div', { class: 'mm-box' },
       h('div', { class: 'mm-swords' }, icon(Swords)),
       h('h2', { textContent: title }),
       h('div', { class: 'stroke dots', textContent: sub }),
+      status,
       invite,
-      cancel,
+      h('div', { class: 'row' }, cancel, train),
     ),
   );
+  return {
+    el,
+    setStatus(s) {
+      status.hidden = false;
+      const range = s.range === null ? 'Any trophy range' : `±${s.range} trophies`;
+      status.replaceChildren(
+        h('div', { class: 'mm-stat' }, h('span', { class: 'k', textContent: 'Searching' }), h('span', { class: 'v stroke', textContent: `${Math.floor(s.waited / 60)}:${String(s.waited % 60).padStart(2, '0')}` })),
+        h('div', { class: 'mm-stat' }, icon(Trophy), h('span', { class: 'v', textContent: range })),
+        h('div', { class: 'mm-stat' }, icon(Users), h('span', { class: 'v', textContent: `${s.searching} in queue` })),
+        h('div', { class: 'mm-stat muted' }, icon(Bot), h('span', { class: 'v', textContent: s.botIn > 0 ? `Bot steps in after ${s.botIn}s` : 'Calling in a bot…' })),
+      );
+    },
+  };
 }
 
 export interface ResultInfo {
   winner: 'me' | 'foe' | 'draw';
+  myTeam: Team;
+  mode: MatchMode;
   myName: string;
   foeName: string;
+  foeIsBot: boolean;
   myCrowns: number;
   foeCrowns: number;
   reason: string;
+  /** Ranked: queue again. Otherwise: ask for a rematch in a fresh room. */
   onAgain(): void;
   onMenu(): void;
 }
@@ -48,26 +80,90 @@ const REASONS: Record<string, string> = {
   forfeit: 'A trainer left the battle.',
 };
 
-/** Clash-style result: rival on top, you below, the winner gets the ribbon. */
-export function resultOverlay(r: ResultInfo): HTMLDivElement {
-  const side = (who: 'me' | 'foe') => {
-    const crowns = who === 'me' ? r.myCrowns : r.foeCrowns;
-    return h('div', { class: `result-side ${who}` },
-      r.winner === who ? h('div', { class: 'winner-ribbon', textContent: 'Winner!' }) : null,
-      avatar(who === 'me' ? 'red' : 'blue'),
-      h('div', { class: 'plate-name', textContent: who === 'me' ? r.myName : r.foeName }),
-      h('div', { class: 'crowns' }, ...[0, 1, 2].map((i) => icon(Crown, `crown ${who === 'me' ? 'mine' : 'enemy'}${i < crowns ? ' won' : ''}`))),
+const MODE_NOTE: Record<MatchMode, string> = {
+  ranked: '',
+  friendly: 'Friendly battle: no trophies at stake.',
+  training: 'Training battle: no trophies at stake.',
+  casual: 'Unrated battle.',
+};
+
+/** Clash-style result: rival on top, you below, the winner gets the ribbon; then trophies and stats. */
+export class ResultScreen {
+  readonly el: HTMLDivElement;
+  private readonly myDelta = h('div', { class: 'result-delta' });
+  private readonly statsEl = h('div', { class: 'result-stats' });
+  private readonly rematchNote = h('div', { class: 'reason' });
+  private readonly again: HTMLButtonElement;
+  private asked = false;
+
+  constructor(private readonly r: ResultInfo) {
+    const side = (who: 'me' | 'foe') => {
+      const crowns = who === 'me' ? r.myCrowns : r.foeCrowns;
+      return h('div', { class: `result-side ${who}` },
+        r.winner === who ? h('div', { class: 'winner-ribbon', textContent: 'Winner!' }) : null,
+        avatar(who === 'me' ? 'red' : 'blue'),
+        h('div', { class: 'plate-name', textContent: who === 'me' ? r.myName : r.foeName }),
+        h('div', { class: 'crowns' }, ...[0, 1, 2].map((i) => icon(Crown, `crown ${who === 'me' ? 'mine' : 'enemy'}${i < crowns ? ' won' : ''}`))),
+        who === 'me' ? this.myDelta : null,
+      );
+    };
+    const ranked = r.mode === 'ranked';
+    this.again = h('button', { class: 'btn gold' }, ranked ? 'Battle again' : 'Rematch');
+    const menu = h('button', { class: 'btn' }, 'OK');
+    this.again.addEventListener('click', () => {
+      if (!ranked) {
+        this.asked = true;
+        this.again.disabled = true;
+        this.rematchNote.textContent = r.foeIsBot ? 'Setting up…' : 'Waiting for your rival…';
+      }
+      r.onAgain();
+    });
+    menu.addEventListener('click', r.onMenu);
+    this.el = h('div', { class: 'result' },
+      side('foe'),
+      h('h2', { textContent: r.winner === 'draw' ? 'Draw' : r.winner === 'me' ? 'Victory!' : 'Defeat' }),
+      side('me'),
+      h('div', { class: 'reason', textContent: [REASONS[r.reason] ?? '', MODE_NOTE[r.mode]].filter(Boolean).join(' ') }),
+      this.statsEl,
+      h('div', { class: 'actions' }, menu, this.again),
+      this.rematchNote,
     );
-  };
-  const again = h('button', { class: 'btn gold' }, 'Play again');
-  const menu = h('button', { class: 'btn' }, 'OK');
-  again.addEventListener('click', r.onAgain);
-  menu.addEventListener('click', r.onMenu);
-  return h('div', { class: 'result' },
-    side('foe'),
-    h('h2', { textContent: r.winner === 'draw' ? 'Draw' : r.winner === 'me' ? 'Victory!' : 'Defeat' }),
-    side('me'),
-    h('div', { class: 'reason', textContent: REASONS[r.reason] ?? '' }),
-    h('div', { class: 'actions' }, menu, again),
-  );
+  }
+
+  setSummary(s: SummaryMessage) {
+    const mine = s.teams[this.r.myTeam];
+    const foe = s.teams[(1 - this.r.myTeam) as Team];
+    this.myDelta.replaceChildren(...(s.mode === 'ranked' ? [deltaPill(mine.delta), h('div', { class: 'trophy-total stroke' }, icon(Trophy), String(mine.trophies))] : []));
+    const rows: Array<[string, (b: BattleStats) => number]> = [
+      ['Cards played', (b) => b.cardsPlayed],
+      ['Elixir spent', (b) => b.elixirSpent],
+      ['Tower damage', (b) => b.towerDamage],
+      ['Troops defeated', (b) => b.defeated],
+    ];
+    this.statsEl.replaceChildren(
+      h('div', { class: 'result-stats-head' }, h('span', {}), h('span', { class: 'stroke', textContent: 'You' }), h('span', { class: 'stroke', textContent: 'Rival' })),
+      ...rows.map(([label, get]) => {
+        const a = get(mine.stats);
+        const b = get(foe.stats);
+        return h('div', { class: 'result-stats-row' },
+          h('span', { class: 'k', textContent: label }),
+          h('span', { class: `v stroke${a > b ? ' lead' : ''}`, textContent: String(a) }),
+          h('span', { class: `v stroke${b > a ? ' lead' : ''}`, textContent: String(b) }));
+      }),
+    );
+  }
+
+  setRematch(state: RematchStateMessage) {
+    if (this.r.mode === 'ranked') return;
+    const foeAsked = state.requested[(1 - this.r.myTeam) as Team];
+    if (!state.open) {
+      this.again.disabled = true;
+      if (!this.r.foeIsBot) this.rematchNote.textContent = 'Your rival has left.';
+      return;
+    }
+    if (foeAsked && !this.asked && !this.r.foeIsBot) {
+      this.rematchNote.textContent = `${this.r.foeName} wants a rematch!`;
+      this.again.classList.add('pulse');
+    }
+  }
 }

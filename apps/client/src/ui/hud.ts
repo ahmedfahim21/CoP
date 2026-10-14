@@ -1,4 +1,4 @@
-import { Crown } from 'lucide';
+import { Crown, Trophy } from 'lucide';
 import { CARDS, ELIXIR_MAX, type CardId, type ErrorMessage, type HandMessage, type Point, type Team } from '@cop/shared';
 import type { Session } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';
@@ -41,6 +41,7 @@ export class BattleHud {
   private readonly foeCrowns = h('div', { class: 'crowns' });
   private readonly myCrowns = h('div', { class: 'crowns' });
   private readonly foeName = h('div', { class: 'plate-name', textContent: 'Rival' });
+  private readonly foeTag = h('div', { class: 'foe-tag' });
   private readonly cards: HTMLDivElement[] = [];
   private readonly nextHolder = h('div', {});
   private readonly elixir = h('div', { class: 'elixir' });
@@ -66,7 +67,7 @@ export class BattleHud {
     this.el = h('div', { attrs: { id: 'battle' } },
       h('div', { class: 'battle-stage' }, this.stageHost, this.barsLayer, this.textLayer, this.center),
       h('div', { class: 'hud-top' },
-        h('div', { class: 'foe-plate' }, avatar('blue'), h('div', {}, this.foeName, this.foeCrowns)),
+        h('div', { class: 'foe-plate' }, avatar('blue'), h('div', {}, this.foeName, h('div', { class: 'foe-line' }, this.foeCrowns, this.foeTag))),
         this.timerBox,
       ),
       h('div', { class: 'mine-crowns' }, this.myCrowns),
@@ -307,7 +308,11 @@ export class BattleHud {
       if (p.team === this.team) {
         if (p.crowns !== this.crowns.mine) this.renderCrowns(this.myCrowns, (this.crowns.mine = p.crowns), 'mine', true);
       } else {
-        if (this.foeName.textContent !== p.name) this.foeName.textContent = p.name;
+        if (this.foeName.textContent !== p.name) {
+          this.foeName.textContent = p.name;
+          // Bots are named "… (bot)"; guests have no trophies to show.
+          this.foeTag.replaceChildren(...(p.profileId ? [icon(Trophy), String(p.trophies)] : []));
+        }
         if (p.crowns !== this.crowns.foe) this.renderCrowns(this.foeCrowns, (this.crowns.foe = p.crowns), 'enemy', true);
       }
     });
@@ -335,10 +340,15 @@ export class BattleHud {
     el.addEventListener('animationend', () => el.remove(), { once: true });
   }
 
-  private toast(text: string) {
+  /** A short-lived banner, e.g. "Not enough elixir!". */
+  notify(text: string, ms = 1300) {
     this.setStatus(text);
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.setStatus(null), 1300);
+    this.toastTimer = window.setTimeout(() => this.setStatus(null), ms);
+  }
+
+  private toast(text: string) {
+    this.notify(text);
   }
 
   private floatText(text: string, x: number, y: number, tone: 'super' | 'weak' | 'special') {

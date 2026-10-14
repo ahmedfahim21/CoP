@@ -4,7 +4,7 @@ A Clash Royale–style 1v1 browser game in 3D. Your king tower is a trainer, you
 
 ## Run it
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22.13+ (for the built-in `node:sqlite`) and pnpm 10.
 
 ```bash
 pnpm install
@@ -12,7 +12,8 @@ pnpm dev
 ```
 
 - Game: http://localhost:5173 (game server on :2567)
-- Open two browser windows to play against yourself, or share the invite link from **Create private room**.
+- Profiles, trophies and match history are stored in SQLite at `apps/server/data/cop.sqlite`; set `COP_DB` to put it elsewhere. Delete the file to reset the ladder.
+- To play ranked against yourself, use two browser profiles (or one normal and one private window): each gets its own trainer profile. Two tabs of the same profile can still be matched, but the battle is unrated. **Create room** gives a friendly invite link.
 - Phones on the same network can join via the "Network" URL Vite prints. The client talks to `<page host>:2567`; set `VITE_SERVER_URL` to point it elsewhere.
 
 ## Test
@@ -22,20 +23,32 @@ pnpm test        # shared rules, server room and client maths tests
 pnpm typecheck
 ```
 
-- `packages/shared/src/*.test.ts`: type chart, deploy zones, elixir, targeting, bridges, splash, kamikaze, attack events, towers/crowns, overtime/tiebreak, forfeit, and a bot-vs-bot soak test.
-- `apps/server/test/BattleRoom.test.ts`: matchmaking (quick + private), join validation and trainer names, play validation with before/after state snapshots, private hands, projectile sync, disconnect → forfeit, trainer sprite proxy.
+- `packages/shared/src/*.test.ts`: type chart, deploy zones, elixir, targeting, bridges, splash, kamikaze, attack events, towers/crowns, overtime/tiebreak, forfeit, a bot-vs-bot soak test, trophy maths and arenas, and the training bot (legal plays only, beats idle and random players, defends pushes).
+- `apps/server/test/BattleRoom.test.ts`: rooms (quick + private), join validation and trainer names, play validation with before/after state snapshots, private hands, projectile sync, disconnect → forfeit, trainer sprite proxy.
+- `apps/server/test/store.test.ts`, `matchmaking.test.ts`: profile storage, credentials, ladder order and ranks, rated vs unrated battles, match history; queue pairing (trophy windows, wait-time widening, no instant rematches, same-profile last resort).
+- `apps/server/test/ladder.test.ts`: the profile API, ranked queue → battle → trophies and leaderboard, forfeits, bot fallback, no-show opponents, training, rematches.
 - `apps/client/src/three/*.test.ts`: snapshot interpolation and scene coordinate maths.
 
 ## How it plays
 
 - **Towers** tab: pick which of Bulbasaur / Charmander / Squirtle guards your left and right towers. Their attacks are typed (Razor Leaf, Ember, Water Gun).
 - **Cards** tab: build your 8-card Battle Deck from the 19-card collection (tap a card → **Use** → tap the deck card to replace). Each card shows its stats and speciality.
-- **Battle** tab: quick match, or a friendly battle by room code / invite link. Tap the pencil to set your trainer name.
+- **Battle** tab: **Battle** joins the ranked queue; **Train** plays the bot; **Friendly battle** by room code / invite link. Tap the pencil to set your trainer name.
+- **Ranks** tab: the trophy leaderboard (top 50 and your own rank). Tap a trainer to see their profile and recent battles.
+- **Profile** tab: trophies, arena progress, win rate, streaks, three-crown wins, battle log, and your **restore code**.
 - In battle, drag a card onto your half (a translucent preview shows where it lands), or tap a card and then tap the arena.
 - Elixir: start 5, max 10, +1 every 2.8s, doubled in the last minute and overtime.
 - Destroying a side tower gives 1 crown and lets you deploy deeper in that lane. Destroying the trainer wins outright.
 - 3:00 match. Tied → 1:00 sudden-death overtime → still tied: the side whose weakest tower is healthier wins.
 - Type effectiveness uses the real chart, softened for balance: super effective ×1.5, not very effective ×0.75, immune ×0.5.
+
+### Profiles, trophies and matchmaking
+
+- On first launch the client creates a trainer profile on the server and keeps its credential (`<tag>.<secret>`) in localStorage. Name, deck and tower picks sync to the profile, so they follow you to any device where you enter the **restore code** (Profile tab). The server stores only a hash of the secret.
+- **Ranked** battles move trophies Elo-style (K = 60: an even match is ±30; a win is always worth at least +5; you never drop below 0). Ten Kanto arenas mark progress, from Pallet Town (0) to Indigo Plateau (4000). Friendly, training and same-profile battles are recorded in the battle log but never rated.
+- **Matchmaking**: everyone searching sits in one queue room that pairs players once a second. Each player accepts a trophy gap of ±100 at first, widening by 40 per second, and any gap after 20 s. Longest-waiting players pick first and get the closest opponent in range; the queue avoids pairing you with last battle's rival, or with your own profile, unless nobody else fits. Nobody waits forever: after 30 s, or if the paired opponent never takes their seat, you battle the bot instead.
+- **Training bot**: a server-side opponent (`packages/shared/src/bot.ts`) that sends the same plays a player would. It defends with counters (type matchups, splash against swarms, a turret against tower-seekers), commits to one lane, leads pushes with a tank and backs it up.
+- After every battle the result screen shows trophies won or lost and per-player stats (cards played, elixir spent, tower damage, troops defeated). Friendly and training battles offer a **Rematch**, which starts once both trainers ask; ranked offers **Battle again**.
 
 Every card is a Pokémon; most carry a speciality that borrows a Clash Royale mechanic:
 
@@ -72,13 +85,20 @@ With `pnpm dev` running, open http://localhost:5173/sandbox.html. It runs the re
 ```
 packages/shared   Game rules (pure, deterministic simulation), card/starter data, type chart,
                   network schema and message types. Used by both server and client.
-apps/server       Colyseus room: matchmaking, 20 Hz authoritative tick, private hands,
-                  20s reconnect window, /sprites/trainer/:name proxy.
+apps/server       Colyseus rooms and HTTP API.
+  BattleRoom        20 Hz authoritative tick, private hands, 20s reconnect window, modes
+                    (ranked / friendly / training / casual), bot seat, result recording, rematch
+  QueueRoom         ranked queue; pairing rules in matchmaking.ts
+  store.ts          SQLite profiles, ladder and match history (node:sqlite)
+  api.ts            /api/profiles, /api/profiles/me, /api/profiles/:tag, /api/leaderboard
+  sprites.ts        /sprites/trainer/:name proxy
 apps/client       Vite + three.js battle, DOM menus and HUD.
   src/three/        stage (renderer, camera, lights), arena, towers, fx (particles), views,
                     battle (state mirroring), interp (snapshot buffer), diorama (menu arena)
   src/three/rigs/   kit (rig builder), motion (gaits, gallop, attack curves), species/* (one file per model)
-  src/ui/           home (tabs, deck builder), hud (battle overlay + input), cards, overlays, style.css
+  src/ui/           home (tabs, deck builder), ladder (ranks, profile), hud (battle overlay + input),
+                    cards, overlays (matchmaking, result), style.css
+  src/profile.ts    trainer profile session: credential, server sync, restore
   src/sandbox/      local-simulation animation sandbox (sandbox.html)
 ```
 
@@ -92,4 +112,5 @@ Every Pokémon and both trainers are built from primitives (`src/three/rigs/spec
 
 - In-battle models are procedural, so no Pokémon art ships with the game. Card portraits load at runtime from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repo's official artwork; trainer portraits come from Pokémon Showdown through the server proxy because Showdown doesn't send CORS headers. This is a non-commercial fan project; Pokémon is © Nintendo / Game Freak / The Pokémon Company.
 - `.npmrc` uses `node-linker=hoisted`: Colyseus packages have circular peer dependencies, and pnpm's default layout loads several copies of `@colyseus/core`, which makes every join fail with "seat reservation expired".
-- Server logs every join, play (and rejected play), drop, and match result with the room id.
+- Server logs every join, play (and rejected play), drop, and match result with the room id, plus queue pairings.
+- Rooms the server creates itself (ranked rooms from the queue, rematch rooms) carry a per-process secret in their options (`trust.ts`), so a client can't create a ranked room or claim someone else's profile through a seat reservation.

@@ -1,40 +1,54 @@
-import { Bird, Castle, Crosshair, Footprints, Heart, Layers, Pencil, Shield, Sparkles, Swords, Target, Timer, Users, Zap } from 'lucide';
-import { CARDS, CARD_IDS, FORMS, STARTERS, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type StarterId, type StarterPick } from '@cop/shared';
-import { ALL_STARTERS, savePrefs, type Prefs } from '../prefs.js';
+import { Bird, Castle, Crosshair, Dumbbell, Footprints, Heart, Layers, Pencil, Shield, Sparkles, Swords, Target, Timer, Trophy, User, Users, Zap } from 'lucide';
+import { CARDS, CARD_IDS, FORMS, STARTERS, arenaFor, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type StarterId, type StarterPick } from '@cop/shared';
+import { ALL_STARTERS, type Prefs } from '../prefs.js';
+import type { ProfileSession } from '../profile.js';
 import { createDiorama } from '../three/diorama.js';
 import { trainerSpriteUrl } from '../config.js';
 import { cardEl, dropEl, starterArt } from './cards.js';
 import { h, icon } from './dom.js';
+import { ProfilePanel, RanksPanel, trophyPill } from './ladder.js';
 
-export type Tab = 'cards' | 'battle' | 'towers';
+export type Tab = 'cards' | 'towers' | 'battle' | 'ranks' | 'profile';
 
 export interface HomeHooks {
-  onQuickMatch(): void;
+  onRanked(): void;
+  onTraining(): void;
   onCreateRoom(): void;
   onJoinRoom(code: string): void;
 }
 
-/** The menu shell: top bar, three tabs, bottom navigation. */
+/** The menu shell: top bar, five tabs, bottom navigation. */
 export class Home {
   readonly el: HTMLDivElement;
   private readonly panels: Record<Tab, HTMLDivElement>;
   private readonly navButtons: Record<Tab, HTMLButtonElement>;
   private readonly errorEl = h('div', { class: 'error-text' });
   private readonly codeInput: HTMLInputElement;
+  private readonly ranks: RanksPanel;
   private diorama: { dispose(): void } | null = null;
   private dioramaHost = h('div', { class: 'stage-host' });
+  private readonly arenaName = h('span', {});
+  private readonly arenaSub = h('small', {});
+  private readonly battleSub = h('span', { class: 'sub' });
   private tab: Tab = 'battle';
   private activeSlot: 0 | 1 = 0;
+  /** Re-render the loadout tabs, e.g. after the server profile replaces local prefs. */
+  private readonly rerender: Array<() => void> = [];
 
-  constructor(private readonly prefs: Prefs, private readonly hooks: HomeHooks, initialCode: string) {
+  constructor(private readonly prefs: Prefs, private readonly profiles: ProfileSession, private readonly hooks: HomeHooks, initialCode: string) {
     this.codeInput = h('input', { class: 'code-input', placeholder: 'Room code', value: initialCode, autocomplete: 'off', spellcheck: false, maxLength: 24 });
+    this.ranks = new RanksPanel(profiles);
     this.panels = {
       cards: this.buildCards(),
-      battle: this.buildBattle(),
       towers: this.buildTowers(),
+      battle: this.buildBattle(),
+      ranks: this.ranks.el,
+      profile: new ProfilePanel(profiles).el,
     };
     const nav = h('nav', { class: 'nav' });
-    const tabs: Array<[Tab, string, Parameters<typeof icon>[0]]> = [['cards', 'Cards', Layers], ['battle', 'Battle', Swords], ['towers', 'Towers', Castle]];
+    const tabs: Array<[Tab, string, Parameters<typeof icon>[0]]> = [
+      ['cards', 'Cards', Layers], ['towers', 'Towers', Castle], ['battle', 'Battle', Swords], ['ranks', 'Ranks', Trophy], ['profile', 'Profile', User],
+    ];
     this.navButtons = {} as Record<Tab, HTMLButtonElement>;
     for (const [t, label, ic] of tabs) {
       const b = h('button', { class: 'nav-tab', attrs: { role: 'tab', 'aria-selected': 'false' } }, icon(ic), h('span', { textContent: label }));
@@ -44,11 +58,31 @@ export class Home {
     }
     this.el = h('div', { attrs: { id: 'app' } },
       this.buildTopbar(),
-      h('div', { class: 'content' }, this.panels.cards, this.panels.battle, this.panels.towers),
+      h('div', { class: 'content' }, ...Object.values(this.panels)),
       nav,
     );
     document.body.append(this.el);
     this.select('battle');
+    this.showArena();
+    let lastLoadout = loadoutKey(prefs);
+    profiles.onChange(() => {
+      this.showArena();
+      // The server's copy of the loadout may have replaced the local one.
+      const key = loadoutKey(prefs);
+      if (key === lastLoadout) return;
+      lastLoadout = key;
+      for (const fn of this.rerender) fn();
+      this.unmountDiorama();
+      if (!this.el.hidden) this.mountDiorama();
+    });
+  }
+
+  private showArena() {
+    const p = this.profiles.profile;
+    const arena = arenaFor(p?.trophies ?? 0);
+    this.arenaName.textContent = `Arena ${arena.index}`;
+    this.arenaSub.textContent = arena.name;
+    this.battleSub.textContent = this.profiles.status === 'offline' ? 'Ranked · offline, tap to retry' : 'Ranked · 1v1';
   }
 
   show(error: string | null = null) {
@@ -72,6 +106,7 @@ export class Home {
     }
     if (tab === 'battle' && !this.el.hidden) this.mountDiorama();
     else this.unmountDiorama();
+    if (tab === 'ranks') void this.ranks.load();
   }
 
   private mountDiorama() {
@@ -88,13 +123,28 @@ export class Home {
 
   private buildTopbar(): HTMLElement {
     const name = h('div', { class: 'plate-name', textContent: this.prefs.name });
+    const sub = h('div', { class: 'plate-sub' });
+    const trophies = h('div', {});
     const edit = h('button', { class: 'name-edit', attrs: { 'aria-label': 'Edit trainer name' } }, icon(Pencil));
-    const textCol = h('div', { attrs: { style: 'min-width:0;flex:1' } }, name, h('div', { class: 'plate-sub', textContent: 'Kanto League' }));
+    const textCol = h('div', { attrs: { style: 'min-width:0;flex:1' } }, name, sub);
+    const show = () => {
+      const p = this.profiles.profile;
+      // While the name is being edited, the input owns it.
+      if (!edit.hidden) name.textContent = this.prefs.name;
+      sub.textContent = p ? `${arenaFor(p.trophies).name}${p.rank ? ` · #${p.rank}` : ''}` : this.profiles.status === 'offline' ? 'Offline' : 'Kanto League';
+      trophies.replaceChildren(trophyPill(p?.trophies ?? 0));
+    };
+    this.profiles.onChange(show);
+    show();
+    textCol.addEventListener('click', () => {
+      // Not while renaming: the click is for the input.
+      if (!edit.hidden) this.select('profile');
+    });
     edit.addEventListener('click', () => {
       const input = h('input', { class: 'name-input', value: this.prefs.name, maxLength: TRAINER_NAME_MAX });
       const commit = () => {
         this.prefs.name = sanitizeTrainerName(input.value);
-        savePrefs(this.prefs);
+        this.profiles.saveLoadout();
         name.textContent = this.prefs.name;
         input.replaceWith(name);
         edit.hidden = false;
@@ -110,14 +160,17 @@ export class Home {
     });
     return h('header', { class: 'topbar' },
       h('div', { class: 'profile' }, avatar('red'), textCol, edit),
+      trophies,
     );
   }
 
   // --- Battle tab ---
 
   private buildBattle(): HTMLDivElement {
-    const battle = h('button', { class: 'btn gold battle' }, 'Battle', h('span', { class: 'sub', textContent: '1v1 · Quick match' }));
-    battle.addEventListener('click', () => this.hooks.onQuickMatch());
+    const battle = h('button', { class: 'btn gold battle' }, 'Battle', this.battleSub);
+    battle.addEventListener('click', () => this.hooks.onRanked());
+    const train = h('button', { class: 'btn purple small' }, icon(Dumbbell, 'btn-icon'), ' Train');
+    train.addEventListener('click', () => this.hooks.onTraining());
     const create = h('button', { class: 'btn purple small' }, 'Create room');
     create.addEventListener('click', () => this.hooks.onCreateRoom());
     const join = h('button', { class: 'btn green small' }, 'Join');
@@ -130,8 +183,15 @@ export class Home {
     updateJoin();
 
     return h('div', { class: 'tab-panel' },
-      h('div', { class: 'arena-showcase' }, this.dioramaHost, h('div', { class: 'arena-label stroke' }, 'Kanto Arena', h('small', { textContent: 'Pallet Town grounds' }))),
+      h('div', { class: 'arena-showcase' }, this.dioramaHost, h('div', { class: 'arena-label stroke' }, this.arenaName, this.arenaSub)),
       battle,
+      h('div', { class: 'panel' },
+        h('div', { class: 'row training-row' },
+          h('div', { class: 'grow' },
+            h('div', { class: 'panel-title stroke' }, icon(Dumbbell), 'Training camp'),
+            h('div', { class: 'hint left', textContent: 'Practice against a bot. No trophies at stake.' })),
+          train),
+      ),
       h('div', { class: 'panel' },
         h('div', { class: 'panel-title stroke' }, icon(Users), 'Friendly battle'),
         h('div', { class: 'row' }, create, this.codeInput, join),
@@ -155,7 +215,7 @@ export class Home {
         c.addEventListener('click', () => {
           if (pending) {
             this.prefs.deck = deck.map((d) => (d === id ? pending! : d));
-            savePrefs(this.prefs);
+            this.profiles.saveLoadout();
             pending = null;
             render();
           } else {
@@ -193,6 +253,10 @@ export class Home {
       panel.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
     };
     render();
+    this.rerender.push(() => {
+      pending = null;
+      render();
+    });
     return panel;
   }
 
@@ -225,6 +289,7 @@ export class Home {
       }));
     };
     render();
+    this.rerender.push(render);
     return h('div', { class: 'tab-panel' },
       h('h2', { textContent: 'Tower Pokémon' }),
       h('div', { class: 'hint', textContent: 'Your starters guard your side towers and attack with their typed moves.' }),
@@ -241,10 +306,14 @@ export class Home {
     if (pick[other] === id) pick[other] = pick[this.activeSlot];
     pick[this.activeSlot] = id;
     this.prefs.starters = pick as StarterPick;
-    savePrefs(this.prefs);
+    this.profiles.saveLoadout();
     this.activeSlot = other;
     rerender();
   }
+}
+
+function loadoutKey(p: Prefs): string {
+  return JSON.stringify([p.name, p.deck, p.starters]);
 }
 
 export function avatar(look: 'red' | 'blue'): HTMLDivElement {
