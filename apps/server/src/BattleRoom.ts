@@ -59,6 +59,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
 
   /** Injected by the app; null runs without persistence (nothing is recorded). */
   protected store: ProfileStore | null = null;
+  private finishing = false;
 
   maxClients = 2;
   state = new BattleState({
@@ -92,12 +93,13 @@ export class BattleRoom extends Room<{ state: BattleState }> {
     }
   }
 
-  onJoin(client: Client, options: RoomOptions) {
+  async onJoin(client: Client, options: RoomOptions) {
     if (!isStarterPick(options.starters)) throw new ServerError(400, 'Pick two different starters');
     if (options.deck !== undefined && !isDeck(options.deck)) throw new ServerError(400, 'A deck is eight different cards');
+    const identity = await this.identify(options);
+    // Checked after the lookup: nothing awaits between here and taking the seat.
     // A late arrival whose seat the bot already took (see partnerNoShow).
     if (this.seats[0] && this.seats[1]) throw new ServerError(409, 'This battle has already started');
-    const identity = this.identify(options);
     const team: Team = this.seats[0] === null ? 0 : 1;
     this.teams.set(client.sessionId, team);
     this.seats[team] = {
@@ -145,26 +147,29 @@ export class BattleRoom extends Room<{ state: BattleState }> {
       forfeit(this.match, team);
       this.syncState();
       this.setSimulationInterval();
-      this.finish();
+      void this.finish();
     } else {
       this.broadcastRematchState();
     }
   }
 
   onUncaughtException(error: Error, methodName: string) {
+    // A refused join (bad starters, bad credential, room full) is the player's problem,
+    // not the room's: Colyseus already sends it back to them. Don't end everyone's battle.
+    if (error.cause instanceof ServerError) return;
     logger.error(`[room ${this.roomId}] ${methodName} failed:`, error);
     // A broken simulation must not keep running silently; close the room so clients see it.
     void this.disconnect();
   }
 
   /** Who is joining: a seat the server reserved, a profile credential, or a guest. */
-  private identify(options: RoomOptions): Pick<Seat, 'profileId' | 'name' | 'trophies'> {
+  private async identify(options: RoomOptions): Promise<Pick<Seat, 'profileId' | 'name' | 'trophies'>> {
     if (options.internalKey === INTERNAL_KEY && typeof options.profileId === 'string') {
-      const profile = this.store?.get(options.profileId);
+      const profile = await this.store?.get(options.profileId);
       if (profile) return { profileId: profile.id, name: profile.name, trophies: profile.trophies };
     }
     if (options.credential !== undefined && this.store) {
-      const profile = this.store.authenticate(options.credential);
+      const profile = await this.store.authenticate(options.credential);
       if (!profile) throw new ServerError(401, 'Profile not recognised');
       return { profileId: profile.id, name: profile.name, trophies: profile.trophies };
     }
@@ -231,7 +236,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
     if (match.phase === 'ended') {
       this.setSimulationInterval();
       logger.info(`[room ${this.roomId}] match ended: ${JSON.stringify(match.result)}`);
-      this.finish();
+      void this.finish();
     }
   }
 
@@ -268,16 +273,18 @@ export class BattleRoom extends Room<{ state: BattleState }> {
   }
 
   /** Record the result once and tell everyone how it went. */
-  private finish() {
+  private async finish() {
     const match = this.match;
-    if (!match?.result || this.summary) return;
+    if (!match?.result || this.summary || this.finishing) return;
+    // Set before the first await, so a second end-of-match signal can't record it twice.
+    this.finishing = true;
     const seats = this.seats as [Seat, Seat];
     for (const team of [0, 1] as const) this.stats[team].towerDamage = towerDamageTo(match, (1 - team) as Team);
     const side = (t: Team) => ({ profileId: seats[t].profileId, name: seats[t].name, crowns: match.players[t].crowns });
     let recorded = seats.map((s) => ({ trophiesBefore: s.trophies, delta: 0 }));
     if (this.store && seats.some((s) => s.profileId)) {
       try {
-        recorded = this.store.recordMatch({
+        recorded = await this.store.recordMatch({
           mode: this.mode,
           winner: match.result.winner,
           reason: match.result.reason,

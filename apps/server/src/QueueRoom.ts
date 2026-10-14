@@ -35,10 +35,10 @@ export class QueueRoom extends Room {
     this.clock.setInterval(() => this.cycle(), QueueRoom.cycleMs);
   }
 
-  onJoin(client: Client, options: Partial<QueueJoinOptions>) {
+  async onJoin(client: Client, options: Partial<QueueJoinOptions>) {
     if (!isStarterPick(options.starters)) throw new ServerError(400, 'Pick two different starters');
     if (options.deck !== undefined && !isDeck(options.deck)) throw new ServerError(400, 'A deck is eight different cards');
-    const profile = this.store?.authenticate(options.credential);
+    const profile = await this.store?.authenticate(options.credential);
     if (!profile) throw new ServerError(401, 'Ranked battles need a trainer profile');
     this.waiting.set(client.sessionId, {
       client, profileId: profile.id, name: profile.name, trophies: profile.trophies, joinedAt: Date.now(),

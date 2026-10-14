@@ -1,12 +1,10 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import {
   DEFAULT_DECK, PROFILE_TAG_ALPHABET, PROFILE_TAG_LENGTH, START_TROPHIES, isDeck, isStarterPick, parseCredential, sanitizeTrainerName, trophyDelta,
   type CardId, type LeaderboardEntry, type MatchMode, type MatchRecord, type OwnProfile, type Outcome, type ProfileUpdate,
   type PublicProfile, type ResultReason, type StarterPick, type Team,
 } from '@cop/shared';
+import { DbError, type Rpc } from './db.js';
 
 const DEFAULT_STARTERS: StarterPick = ['charmander', 'squirtle'];
 
@@ -32,270 +30,142 @@ export interface RecordedSide {
   delta: number;
 }
 
-interface ProfileRow {
-  id: string;
-  secret_hash: string;
-  name: string;
-  trophies: number;
-  best_trophies: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  three_crowns: number;
-  streak: number;
-  best_streak: number;
-  battles: number;
-  deck: string;
-  starters: string;
-  created_at: number;
-}
+/** What cop_get_profile returns: an OwnProfile plus the credential hash. */
+type StoredProfile = OwnProfile & { secretHash: string };
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS profiles (
-  id TEXT PRIMARY KEY,
-  secret_hash TEXT NOT NULL,
-  name TEXT NOT NULL,
-  trophies INTEGER NOT NULL,
-  best_trophies INTEGER NOT NULL,
-  wins INTEGER NOT NULL DEFAULT 0,
-  losses INTEGER NOT NULL DEFAULT 0,
-  draws INTEGER NOT NULL DEFAULT 0,
-  three_crowns INTEGER NOT NULL DEFAULT 0,
-  streak INTEGER NOT NULL DEFAULT 0,
-  best_streak INTEGER NOT NULL DEFAULT 0,
-  battles INTEGER NOT NULL DEFAULT 0,
-  deck TEXT NOT NULL,
-  starters TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  last_seen INTEGER NOT NULL
-);
--- The ladder only lists players who have played ranked.
-CREATE INDEX IF NOT EXISTS profiles_ladder ON profiles (trophies DESC, wins DESC, created_at ASC) WHERE wins + losses + draws > 0;
-CREATE TABLE IF NOT EXISTS matches (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  played_at INTEGER NOT NULL,
-  mode TEXT NOT NULL,
-  winner INTEGER,
-  reason TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS match_players (
-  match_id INTEGER NOT NULL REFERENCES matches (id),
-  team INTEGER NOT NULL,
-  profile_id TEXT REFERENCES profiles (id),
-  name TEXT NOT NULL,
-  trophies_before INTEGER NOT NULL,
-  delta INTEGER NOT NULL,
-  crowns INTEGER NOT NULL,
-  PRIMARY KEY (match_id, team)
-);
-CREATE INDEX IF NOT EXISTS match_players_profile ON match_players (profile_id, match_id DESC);
-`;
-
-/** Ladder order, shared by the leaderboard and rank lookups. */
-const RANKED = 'wins + losses + draws > 0';
-const LADDER_ORDER = 'trophies DESC, wins DESC, created_at ASC, id ASC';
+/** Attempts at recording a rated match whose trophies moved underneath it. */
+const RECORD_ATTEMPTS = 4;
 
 /**
- * Profiles, the trophy ladder and match history, in SQLite. Synchronous on purpose: every
- * call is a few indexed statements, and rooms can use it without awaiting mid-tick.
+ * Profiles, the trophy ladder and match history, on Supabase. The data logic lives in the
+ * cop_* SQL functions (supabase/migrations); this class validates input, hashes
+ * credentials and keeps the trophy formula in TypeScript, shared with the client.
  */
 export class ProfileStore {
-  private readonly db: DatabaseSync;
-
-  /** `path` is a file, or ':memory:' for tests. */
-  constructor(path: string) {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
-    this.db = new DatabaseSync(path);
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-    this.db.exec(SCHEMA);
-  }
+  constructor(private readonly db: Rpc) {}
 
   close() {
-    this.db.close();
+    return this.db.close();
   }
 
-  create(rawName: unknown, now = Date.now()): { profile: OwnProfile; credential: string } {
+  async create(rawName: unknown, now = Date.now()): Promise<{ profile: OwnProfile; credential: string }> {
     const name = sanitizeTrainerName(rawName);
     const secret = randomBytes(24).toString('base64url');
-    const insert = this.db.prepare(`
-      INSERT INTO profiles (id, secret_hash, name, trophies, best_trophies, deck, starters, created_at, last_seen)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (let attempt = 0; ; attempt++) {
       const id = newTag();
       try {
-        insert.run(id, hashSecret(secret), name, START_TROPHIES, START_TROPHIES, JSON.stringify(DEFAULT_DECK), JSON.stringify(DEFAULT_STARTERS), now, now);
-        return { profile: this.own(id)!, credential: `${id}.${secret}` };
+        const stored = await this.db.call<StoredProfile>('cop_create_profile', {
+          p_id: id, p_secret_hash: hashSecret(secret), p_name: name, p_trophies: START_TROPHIES,
+          p_deck: [...DEFAULT_DECK], p_starters: [...DEFAULT_STARTERS], p_now: now,
+        });
+        return { profile: toOwn(stored), credential: `${id}.${secret}` };
       } catch (err) {
         // A tag collision is astronomically rare; anything else is a real failure.
-        if (attempt >= 4 || !String(err).includes('UNIQUE')) throw err;
+        if (attempt >= 4 || (err as DbError).code !== '23505') throw err;
       }
     }
   }
 
   /** The profile a credential belongs to, or null if it doesn't check out. */
-  authenticate(credential: unknown, now = Date.now()): OwnProfile | null {
+  async authenticate(credential: unknown, now = Date.now()): Promise<OwnProfile | null> {
     const parsed = parseCredential(credential);
     if (!parsed) return null;
-    const row = this.row(parsed.id);
-    if (!row) return null;
-    const expected = Buffer.from(row.secret_hash, 'hex');
+    const stored = await this.stored(parsed.id);
+    if (!stored) return null;
+    const expected = Buffer.from(stored.secretHash, 'hex');
     const actual = Buffer.from(hashSecret(parsed.secret), 'hex');
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
-    this.db.prepare('UPDATE profiles SET last_seen = ? WHERE id = ?').run(now, row.id);
-    return this.toOwn(row);
+    await this.db.call('cop_touch', { p_id: stored.id, p_now: now });
+    return toOwn(stored);
   }
 
-  get(id: string): PublicProfile | null {
-    const row = this.row(id);
-    return row ? this.toPublic(row) : null;
+  async get(id: string): Promise<PublicProfile | null> {
+    const stored = await this.stored(id);
+    return stored ? toPublic(stored) : null;
   }
 
-  own(id: string): OwnProfile | null {
-    const row = this.row(id);
-    return row ? this.toOwn(row) : null;
+  async own(id: string): Promise<OwnProfile | null> {
+    const stored = await this.stored(id);
+    return stored ? toOwn(stored) : null;
   }
 
   /** Applies the valid fields of `update`; returns which were rejected. */
-  update(id: string, update: ProfileUpdate): { profile: OwnProfile | null; rejected: string[] } {
+  async update(id: string, update: ProfileUpdate): Promise<{ profile: OwnProfile | null; rejected: string[] }> {
     const rejected: string[] = [];
-    if (update.name !== undefined) {
-      this.db.prepare('UPDATE profiles SET name = ? WHERE id = ?').run(sanitizeTrainerName(update.name), id);
-    }
-    if (update.deck !== undefined) {
-      if (isDeck(update.deck)) this.db.prepare('UPDATE profiles SET deck = ? WHERE id = ?').run(JSON.stringify(update.deck), id);
-      else rejected.push('deck');
-    }
-    if (update.starters !== undefined) {
-      if (isStarterPick(update.starters)) this.db.prepare('UPDATE profiles SET starters = ? WHERE id = ?').run(JSON.stringify(update.starters), id);
-      else rejected.push('starters');
-    }
-    return { profile: this.own(id), rejected };
+    const deck = update.deck === undefined ? null : isDeck(update.deck) ? update.deck : (rejected.push('deck'), null);
+    const starters = update.starters === undefined ? null : isStarterPick(update.starters) ? update.starters : (rejected.push('starters'), null);
+    const stored = await this.db.call<StoredProfile | null>('cop_update_profile', {
+      p_id: id,
+      p_name: update.name === undefined ? null : sanitizeTrainerName(update.name),
+      p_deck: deck,
+      p_starters: starters,
+    });
+    return { profile: stored ? toOwn(stored) : null, rejected };
   }
 
   /**
    * Stores a finished battle and, for ranked battles between two different profiles,
-   * moves trophies and ladder stats. Everything happens in one transaction.
+   * moves trophies and ladder stats. The database locks both profiles and refuses if
+   * their trophies moved since we read them; then we re-read, recompute and retry.
    */
-  recordMatch(report: MatchReport, now = Date.now()): [RecordedSide, RecordedSide] {
-    const [a, b] = report.sides;
-    const rows = [a.profileId ? this.row(a.profileId) ?? null : null, b.profileId ? this.row(b.profileId) ?? null : null] as const;
-    const rated = report.mode === 'ranked' && rows[0] !== null && rows[1] !== null && rows[0].id !== rows[1].id;
-    const outcomeOf = (team: Team): Outcome => (report.winner === null ? 'draw' : report.winner === team ? 'win' : 'loss');
-    const before = rows.map((r) => r?.trophies ?? 0) as [number, number];
-    const deltas: [number, number] = rated
-      ? [trophyDelta(before[0], before[1], outcomeOf(0)), trophyDelta(before[1], before[0], outcomeOf(1))]
-      : [0, 0];
-
-    this.db.exec('BEGIN');
-    try {
-      const { lastInsertRowid } = this.db.prepare('INSERT INTO matches (played_at, mode, winner, reason) VALUES (?, ?, ?, ?)')
-        .run(now, report.mode, report.winner, report.reason);
-      const addPlayer = this.db.prepare(`
-        INSERT INTO match_players (match_id, team, profile_id, name, trophies_before, delta, crowns) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-      for (const team of [0, 1] as const) {
-        const side = report.sides[team];
-        const row = rows[team];
-        addPlayer.run(lastInsertRowid, team, row?.id ?? null, side.name, before[team], deltas[team], side.crowns);
-        if (!row) continue;
-        if (!rated) {
-          this.db.prepare('UPDATE profiles SET battles = battles + 1 WHERE id = ?').run(row.id);
-          continue;
-        }
-        const outcome = outcomeOf(team);
-        const trophies = before[team] + deltas[team];
-        const streak = outcome === 'win' ? row.streak + 1 : 0;
-        this.db.prepare(`
-          UPDATE profiles SET
-            trophies = ?, best_trophies = MAX(best_trophies, ?),
-            wins = wins + ?, losses = losses + ?, draws = draws + ?,
-            three_crowns = three_crowns + ?, streak = ?, best_streak = MAX(best_streak, ?), battles = battles + 1
-          WHERE id = ?`).run(
-          trophies, trophies,
-          outcome === 'win' ? 1 : 0, outcome === 'loss' ? 1 : 0, outcome === 'draw' ? 1 : 0,
-          outcome === 'win' && side.crowns === 3 ? 1 : 0, streak, streak,
-          row.id,
-        );
+  async recordMatch(report: MatchReport, now = Date.now()): Promise<[RecordedSide, RecordedSide]> {
+    for (let attempt = 1; ; attempt++) {
+      const [a, b] = report.sides;
+      const stored = [a.profileId ? await this.stored(a.profileId) : null, b.profileId ? await this.stored(b.profileId) : null] as const;
+      const rated = report.mode === 'ranked' && stored[0] !== null && stored[1] !== null && stored[0].id !== stored[1].id;
+      const outcomeOf = (team: Team): Outcome => (report.winner === null ? 'draw' : report.winner === team ? 'win' : 'loss');
+      const before = stored.map((p) => p?.trophies ?? 0) as [number, number];
+      const deltas: [number, number] = rated
+        ? [trophyDelta(before[0], before[1], outcomeOf(0)), trophyDelta(before[1], before[0], outcomeOf(1))]
+        : [0, 0];
+      try {
+        await this.db.call('cop_record_match', {
+          p_mode: report.mode, p_winner: report.winner, p_reason: report.reason, p_rated: rated, p_now: now,
+          p_sides: report.sides.map((side, team) => ({
+            profileId: stored[team]?.id ?? null, name: side.name, crowns: side.crowns, trophiesBefore: before[team], delta: deltas[team],
+          })),
+        });
+        return [{ trophiesBefore: before[0], delta: deltas[0] }, { trophiesBefore: before[1], delta: deltas[1] }];
+      } catch (err) {
+        const stale = err instanceof DbError && err.code === 'P0001' && err.message.includes('stale_trophies');
+        if (!stale || attempt >= RECORD_ATTEMPTS) throw err;
       }
-      this.db.exec('COMMIT');
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
     }
-    return [{ trophiesBefore: before[0], delta: deltas[0] }, { trophiesBefore: before[1], delta: deltas[1] }];
   }
 
   /** Most recent battles first. */
-  recentMatches(id: string, limit = 20): MatchRecord[] {
-    const rows = this.db.prepare(`
-      SELECT m.id, m.played_at, m.mode, m.winner, m.reason,
-             me.team, me.delta, me.crowns,
-             opp.profile_id AS opp_id, opp.name AS opp_name, opp.trophies_before AS opp_trophies, opp.crowns AS opp_crowns
-      FROM match_players me
-      JOIN matches m ON m.id = me.match_id
-      JOIN match_players opp ON opp.match_id = me.match_id AND opp.team != me.team
-      WHERE me.profile_id = ?
-      ORDER BY me.match_id DESC
-      LIMIT ?`).all(id, limit) as Array<{
-        id: number; played_at: number; mode: MatchMode; winner: number | null; reason: ResultReason;
-        team: number; delta: number; crowns: number;
-        opp_id: string | null; opp_name: string; opp_trophies: number; opp_crowns: number;
-      }>;
-    return rows.map((r) => ({
-      id: r.id,
-      playedAt: r.played_at,
-      mode: r.mode,
-      outcome: r.winner === null ? 'draw' : r.winner === r.team ? 'win' : 'loss',
-      reason: r.reason,
-      crowns: r.crowns,
-      opponentCrowns: r.opp_crowns,
-      delta: r.delta,
-      opponent: { id: r.opp_id, name: r.opp_name, trophies: r.opp_trophies },
-    }));
+  recentMatches(id: string, limit = 20): Promise<MatchRecord[]> {
+    return this.db.call<MatchRecord[]>('cop_recent_matches', { p_id: id, p_limit: limit });
   }
 
-  leaderboard(limit = 50, offset = 0): { entries: LeaderboardEntry[]; total: number } {
-    const rows = this.db.prepare(`
-      SELECT id, name, trophies, wins, losses FROM profiles WHERE ${RANKED}
-      ORDER BY ${LADDER_ORDER} LIMIT ? OFFSET ?`).all(limit, offset) as Array<Omit<LeaderboardEntry, 'rank'>>;
-    const { total } = this.db.prepare(`SELECT COUNT(*) AS total FROM profiles WHERE ${RANKED}`).get() as { total: number };
-    return { entries: rows.map((r, i) => ({ rank: offset + i + 1, ...r })), total };
+  leaderboard(limit = 50, offset = 0): Promise<{ entries: LeaderboardEntry[]; total: number }> {
+    return this.db.call('cop_leaderboard', { p_limit: limit, p_offset: offset });
   }
 
   /** 1-based ladder position, or null before a first ranked battle. */
-  rankOf(id: string): number | null {
-    const row = this.row(id);
-    if (!row || row.wins + row.losses + row.draws === 0) return null;
-    const { ahead } = this.db.prepare(`
-      SELECT COUNT(*) AS ahead FROM profiles WHERE ${RANKED} AND (
-        trophies > ?1
-        OR (trophies = ?1 AND wins > ?2)
-        OR (trophies = ?1 AND wins = ?2 AND created_at < ?3)
-        OR (trophies = ?1 AND wins = ?2 AND created_at = ?3 AND id < ?4)
-      )`).get(row.trophies, row.wins, row.created_at, row.id) as { ahead: number };
-    return ahead + 1;
+  async rankOf(id: string): Promise<number | null> {
+    return (await this.stored(id))?.rank ?? null;
   }
 
-  private row(id: string): ProfileRow | undefined {
-    return this.db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) as ProfileRow | undefined;
+  private stored(id: string): Promise<StoredProfile | null> {
+    return this.db.call<StoredProfile | null>('cop_get_profile', { p_id: id });
   }
+}
 
-  private toPublic(r: ProfileRow): PublicProfile {
-    return {
-      id: r.id, name: r.name, createdAt: r.created_at, rank: this.rankOf(r.id),
-      trophies: r.trophies, bestTrophies: r.best_trophies, wins: r.wins, losses: r.losses, draws: r.draws,
-      threeCrowns: r.three_crowns, streak: r.streak, bestStreak: r.best_streak, battles: r.battles,
-    };
-  }
+function toPublic(p: StoredProfile): PublicProfile {
+  return {
+    id: p.id, name: p.name, createdAt: p.createdAt, rank: p.rank,
+    trophies: p.trophies, bestTrophies: p.bestTrophies, wins: p.wins, losses: p.losses, draws: p.draws,
+    threeCrowns: p.threeCrowns, streak: p.streak, bestStreak: p.bestStreak, battles: p.battles,
+  };
+}
 
-  private toOwn(r: ProfileRow): OwnProfile {
-    const deck = parseJson(r.deck);
-    const starters = parseJson(r.starters);
-    return {
-      ...this.toPublic(r),
-      deck: isDeck(deck) ? deck : [...DEFAULT_DECK] as CardId[],
-      starters: isStarterPick(starters) ? starters : DEFAULT_STARTERS,
-    };
-  }
+function toOwn(p: StoredProfile): OwnProfile {
+  return {
+    ...toPublic(p),
+    deck: isDeck(p.deck) ? p.deck : [...DEFAULT_DECK] as CardId[],
+    starters: isStarterPick(p.starters) ? p.starters : DEFAULT_STARTERS,
+  };
 }
 
 function newTag(): string {
@@ -306,12 +176,4 @@ function newTag(): string {
 
 function hashSecret(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }

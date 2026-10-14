@@ -5,6 +5,7 @@ import { createAppServer } from '../src/app.js';
 import { BattleRoom } from '../src/BattleRoom.js';
 import type { FetchFn } from '../src/sprites.js';
 import { ProfileStore } from '../src/store.js';
+import { testRpc } from './pglite.js';
 
 const RED: StarterPick = ['bulbasaur', 'charmander'];
 const BLUE: StarterPick = ['squirtle', 'charmander'];
@@ -14,7 +15,7 @@ const fetchFn = vi.fn<FetchFn>();
 let colyseus: ColyseusTestServer;
 
 beforeAll(async () => {
-  colyseus = await boot(createAppServer({ fetchFn, store: new ProfileStore(':memory:') }));
+  colyseus = await boot(createAppServer({ fetchFn, store: new ProfileStore(await testRpc()) }));
 });
 afterAll(async () => {
   await colyseus.shutdown();
@@ -98,6 +99,17 @@ describe('matchmaking', () => {
     await expect(colyseus.sdk.joinById(a.roomId, { starters: RED })).rejects.toThrow();
     await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, { starters: ['bulbasaur', 'bulbasaur'] })).rejects.toThrow(/starters/);
     await expect(colyseus.sdk.joinOrCreate(ROOM_NAME, {})).rejects.toThrow(/starters/);
+  });
+
+  it('a refused join leaves the waiting room open for a real opponent', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { starters: RED, private: true });
+    const room = colyseus.getRoomById<BattleRoom>(host.roomId);
+    await expect(colyseus.sdk.joinById(host.roomId, { starters: ['bulbasaur', 'bulbasaur'] })).rejects.toThrow(/starters/);
+    await expect(colyseus.sdk.joinById(host.roomId, { starters: BLUE, deck: ['pikachu'] })).rejects.toThrow(/eight different cards/);
+    // The room survived both refusals and still takes a valid second player.
+    const friend = await colyseus.sdk.joinById(host.roomId, { starters: BLUE });
+    expect(friend.roomId).toBe(host.roomId);
+    await vi.waitFor(() => expect(room.state.phase).toBe('countdown'));
   });
 
   it('deals each player from their own deck, and rejects bad decks', async () => {
