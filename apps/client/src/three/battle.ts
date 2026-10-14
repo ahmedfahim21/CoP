@@ -283,7 +283,8 @@ export class BattleView {
 
   private frame(dt: number, t: number) {
     const now = performance.now();
-    const ctx: FrameCtx = { renderTime: now - INTERP_DELAY_MS, dt, t, fx: this.fx, positionOf: this.positionOf };
+    const obstacles = [...this.towers.values()].flatMap((tw) => tw.obstacle() ?? []);
+    const ctx: FrameCtx = { renderTime: now - INTERP_DELAY_MS, dt, t, fx: this.fx, positionOf: this.positionOf, obstacles };
 
     while (this.events.length > 0 && this.events[0]!.at <= now) {
       const ev = this.events.shift()!.value;

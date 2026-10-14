@@ -19,6 +19,29 @@ export interface FrameCtx {
   fx: Fx;
   /** Scene position of another entity, for facing attack targets. */
   positionOf(id: string): THREE.Vector3 | null;
+  /** Standing towers, for fliers to climb over rather than fly through. */
+  obstacles: readonly Obstacle[];
+}
+
+/** A tower's footprint and full height (occupant included), in scene units. */
+export interface Obstacle {
+  x: number;
+  z: number;
+  radius: number;
+  top: number;
+}
+
+/** How high a flier at (x, z) must be to clear every tower near it: full height over a footprint, easing to 0 over `ramp` tiles. */
+export function clearanceAt(x: number, z: number, obstacles: readonly Obstacle[], ramp = 1.8): number {
+  let clear = 0;
+  for (const o of obstacles) {
+    const d = Math.hypot(x - o.x, z - o.z);
+    if (d >= o.radius + ramp) continue;
+    const k = d <= o.radius ? 1 : 1 - (d - o.radius) / ramp;
+    // Smoothstep so the climb starts and ends gently.
+    clear = Math.max(clear, k * k * (3 - 2 * k) * o.top);
+  }
+  return clear;
 }
 
 const ringGeo = new THREE.RingGeometry(0.78, 1, 36);
@@ -50,6 +73,8 @@ export class UnitView {
   defId: UnitId;
   readonly buffer = new SnapshotBuffer();
   flying: boolean;
+  /** Extra height a flier is carrying to clear towers, eased toward what's needed. */
+  private climb = 0;
   radius: number;
   status: UnitStatus = { hidden: false, stunned: false, slowed: false, charging: false };
   private readonly pose: Pose = restPose();
@@ -193,6 +218,12 @@ export class UnitView {
     this.rig.root.rotation.y = this.yaw;
 
     let lift = this.rig.flyHeight;
+    if (this.flying) {
+      // Fliers pass over towers, never through them: climb ahead of one and settle after.
+      const need = clearanceAt(pos.x, pos.z, ctx.obstacles);
+      this.climb += (need - this.climb) * Math.min(1, dt * (need > this.climb ? 7 : 3));
+      lift = Math.max(lift, this.climb);
+    }
     this.updateDeploy(ctx, pos);
     lift += this.updateLeap(ctx, pos);
     if (this.dropT < 1) lift += (1 - this.dropT ** 2) * 4;
@@ -376,6 +407,12 @@ export class TowerView {
   private flashT = 0;
   private wasActive: boolean;
   private ruined = false;
+
+  /** Footprint and height for fliers to clear, or null once fallen. */
+  obstacle(): Obstacle | null {
+    if (this.ruined) return null;
+    return { x: this.position.x, z: this.position.z, radius: this.kind === 'king' ? 2.4 : 2, top: this.model.topY + 0.2 };
+  }
   hp: number;
   maxHp: number;
 
