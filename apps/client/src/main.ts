@@ -2,6 +2,7 @@ import { loadPrefs } from './prefs.js';
 import { ProfileSession } from './profile.js';
 import { createPrivate, joinByCode, rankedSearch, takeSeat, training, type Loadout, type Search, type Session } from './net.js';
 import { bootModels } from './ui/boot.js';
+import { askTrainerName } from './ui/intro.js';
 import { Home } from './ui/home.js';
 import { BattleHud } from './ui/hud.js';
 import { ResultScreen, matchmakingOverlay } from './ui/overlays.js';
@@ -19,6 +20,8 @@ document.addEventListener('pointerdown', (e) => {
 
 const prefs = loadPrefs();
 const profiles = new ProfileSession(prefs);
+// New trainers name themselves first, so their profile is created with that name.
+if (!prefs.named) profiles.chooseName(await askTrainerName());
 void profiles.connect();
 const urlCode = new URLSearchParams(location.search).get('room') ?? '';
 

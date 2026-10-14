@@ -1,5 +1,5 @@
 import { Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
-import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, sanitizeTrainerName, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type TypeMatchup, type StarterPick } from '@cop/shared';
+import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type TypeMatchup, type StarterPick } from '@cop/shared';
 import { ALL_STARTERS, type Prefs } from '../prefs.js';
 import type { ProfileSession } from '../profile.js';
 import { createDiorama } from '../three/diorama.js';
@@ -145,8 +145,7 @@ export class Home {
     edit.addEventListener('click', () => {
       const input = h('input', { class: 'name-input', value: this.prefs.name, maxLength: TRAINER_NAME_MAX });
       const commit = () => {
-        this.prefs.name = sanitizeTrainerName(input.value);
-        this.profiles.saveLoadout();
+        this.profiles.chooseName(input.value);
         name.textContent = this.prefs.name;
         input.replaceWith(name);
         edit.hidden = false;
