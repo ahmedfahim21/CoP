@@ -1,3 +1,4 @@
+import { inject } from '@vercel/analytics';
 import { loadPrefs } from './prefs.js';
 import { ProfileSession } from './profile.js';
 import { createPrivate, joinByCode, rankedSearch, takeSeat, training, type Loadout, type Search, type Session } from './net.js';
@@ -9,6 +10,9 @@ import { ResultScreen, matchmakingOverlay } from './ui/overlays.js';
 import { sound } from './audio/sound.js';
 
 type Mode = 'ranked' | 'training' | 'create' | { code: string };
+
+// Vercel Web Analytics: page views on the deployed site; development builds only log to the console.
+inject({ mode: import.meta.env.PROD ? 'production' : 'development' });
 
 await bootModels({ splash: true });
 
