@@ -3,7 +3,7 @@ import { inRiver, mirror, onBridgeColumn, type Team } from './arena.js';
 import { CARDS } from './cards.js';
 import {
   COUNTDOWN_SECONDS, ELIXIR_MAX, ELIXIR_START, OVERTIME_SECONDS, REGULAR_SECONDS,
-  QUICK_RULES, STANDARD_RULES, canTarget, createMatch, forfeit, isDoubleElixir, openPockets, playCard, rulesFor, statsOf, step,
+  QUICK_RULES, STANDARD_RULES, canTarget, weakestTower, createMatch, forfeit, isDoubleElixir, openPockets, playCard, rulesFor, statsOf, step,
 } from './sim.js';
 import { DT, PICKS, onlyUnits, run, runUntil, spawn, started, tower } from './testing.js';
 
@@ -357,6 +357,24 @@ describe('towers and results', () => {
     d.timeLeft = DT / 2;
     step(d, DT);
     expect(d.result).toEqual({ winner: null, reason: 'draw' });
+  });
+
+  it('training has no tiebreak: equal crowns after overtime is a draw, however damaged the towers', () => {
+    const s = createMatch(PICKS, 1, undefined, QUICK_RULES);
+    s.phase = 'overtime';
+    s.timeLeft = DT / 2;
+    tower(s, 1, 'princess', 'left').hp = 100;
+    step(s, DT);
+    expect(s.result).toEqual({ winner: null, reason: 'draw' });
+  });
+
+  it('weakestTower reads the most damaged standing tower', () => {
+    const s = started();
+    expect(weakestTower(s.entities, 0)).toBe(1);
+    tower(s, 0, 'princess', 'right').hp = 1250;
+    tower(s, 0, 'king').hp = 3000;
+    expect(weakestTower(s.entities, 0)).toBe(0.5);
+    expect(weakestTower(s.entities, 1)).toBe(1);
   });
 
   it('forfeit hands the win to the other side and freezes the match', () => {

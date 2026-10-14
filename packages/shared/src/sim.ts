@@ -24,14 +24,16 @@ export interface MatchRules {
   doubleElixirAt: number;
   /** Multiplies every tower's health. */
   towerHpScale: number;
+  /** Equal crowns after overtime: the healthier weakest tower wins (true), or it's a draw. */
+  tiebreak: boolean;
 }
 
 export const STANDARD_RULES: MatchRules = {
-  regularSeconds: REGULAR_SECONDS, overtimeSeconds: OVERTIME_SECONDS, doubleElixirAt: DOUBLE_ELIXIR_AT, towerHpScale: 1,
+  regularSeconds: REGULAR_SECONDS, overtimeSeconds: OVERTIME_SECONDS, doubleElixirAt: DOUBLE_ELIXIR_AT, towerHpScale: 1, tiebreak: true,
 };
 
-/** Training against the bot: 2:00 with double elixir after 30 seconds, 0:30 overtime, towers at 60%. */
-export const QUICK_RULES: MatchRules = { regularSeconds: 120, overtimeSeconds: 30, doubleElixirAt: 90, towerHpScale: 0.6 };
+/** Training against the bot: 2:00 with double elixir after 30 seconds, 0:30 overtime, towers at 60%; a tie is a draw. */
+export const QUICK_RULES: MatchRules = { regularSeconds: 120, overtimeSeconds: 30, doubleElixirAt: 90, towerHpScale: 0.6, tiebreak: false };
 
 export function rulesFor(mode: MatchMode): MatchRules {
   return mode === 'training' ? QUICK_RULES : STANDARD_RULES;
@@ -973,14 +975,20 @@ function endOfPhase(state: MatchState): void {
     state.timeLeft = state.rules.overtimeSeconds;
     return;
   }
-  // Overtime ran out with equal crowns: the side whose weakest tower is healthier wins.
-  const weakest = ([0, 1] as const).map((team) =>
-    Math.min(...state.entities.filter((e) => e.team === team && e.kind !== 'unit').map((t) => t.hp / t.maxHp)),
-  );
+  // Overtime ran out with equal crowns: a draw, or (with the tiebreak) the side whose weakest
+  // tower is healthier wins.
+  const weakest = ([0, 1] as const).map((team) => weakestTower(state.entities, team));
   state.phase = 'ended';
   state.timeLeft = 0;
-  if (weakest[0] === weakest[1]) state.result = { winner: null, reason: 'draw' };
+  if (!state.rules.tiebreak || weakest[0] === weakest[1]) state.result = { winner: null, reason: 'draw' };
   else state.result = { winner: weakest[0]! > weakest[1]! ? 0 : 1, reason: 'tiebreak' };
+}
+
+/** Health fraction (0..1) of `team`'s most damaged standing tower; the tiebreak compares these. */
+export function weakestTower(entities: Iterable<{ team: number; kind: string; hp: number; maxHp: number }>, team: Team): number {
+  let min = 1;
+  for (const e of entities) if (e.team === team && e.kind !== 'unit') min = Math.min(min, e.hp / e.maxHp);
+  return min;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
