@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import type { Room as ClientRoom } from '@colyseus/sdk';
 import {
-  DEFAULT_DECK, EVENTS, GAUNTLET_RULES, MSG, QUEUE_ROOM_NAME, ROOM_NAME, dailyChallenge, dayKey, draftOffers, draftSeed, isReplay, runReplay,
+  DEFAULT_DECK, EVENTS, GAUNTLET_RULES, MSG, QUEUE_ROOM_NAME, ROOM_NAME, dailyChallenge, dayKey, draftOffers, draftSeed, isReplay, runReplay, UNLOCK_SCHEDULE,
   type CreatedProfileResponse, type MatchState, type RematchMessage, type ReplayResponse, type ScoreboardResponse, type SeatMessage,
   type StarterPick, type StatusResponse, type SummaryMessage, type Team,
 } from '@cop/shared';
@@ -87,8 +87,12 @@ describe('League', () => {
     const s = await summary;
     expect(s.mode).toBe('league');
     expect(s.adventure?.stage).toEqual({ id: 'brock', starsBefore: 0, starsAfter: 3 });
-    // Brock's own card, plus level 2's batch: the clear's XP alone reaches level 2.
-    expect(s.teams[0].rewards?.unlocked.sort()).toEqual(['golem', 'koffing', 'starmie']);
+    // Brock's own card, plus the level batches reached: the clear's XP alone reaches level 2, and
+    // today's quests (drawn from the date and the profile's random tag) can add another level.
+    const rewards = s.teams[0].rewards!;
+    expect(rewards.levelAfter).toBeGreaterThanOrEqual(2);
+    const byLevel = UNLOCK_SCHEDULE.filter((u) => u.level <= rewards.levelAfter).flatMap((u) => u.cards);
+    expect(rewards.unlocked.sort()).toEqual([...new Set(['golem', ...byLevel])].sort());
     expect(s.teams[0].rewards?.rewards.map((r) => r.text)).toContain('Boulder Badge!');
     expect((await store.own(me.profile.id))!.progress.stars).toEqual({ brock: 3 });
     // Misty is open now.
