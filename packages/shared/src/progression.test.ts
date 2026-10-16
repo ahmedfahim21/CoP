@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CARD_IDS, isDeck } from './cards.js';
 import { STAGES, starsFor, stageRules } from './campaign.js';
 import {
-  FIRST_UNLOCK_LEVEL, FIRST_WIN_XP, LEVEL_UNLOCKS, MAX_LEVEL, STARTER_CARDS, applyBattle, applyPuzzle, dayKey, deckUnlocked, emptyProgress,
+  FIRST_UNLOCK_LEVEL, FIRST_WIN_XP, LAST_UNLOCK_LEVEL, LEVEL_UNLOCKS, MAX_LEVEL, STARTER_CARDS, applyBattle, applyPuzzle, dayKey, deckUnlocked, emptyProgress,
   levelFor, nextStage, parseProgress, previousDay, questsFor, stageOpen, unlockLevel, unlockStage, unlockedCards, weekKey, xpToNext,
   type BattleOutcome, type Progress,
 } from './progression.js';
@@ -34,7 +34,13 @@ describe('card unlocks', () => {
   it('starter cards plus level unlocks cover every card exactly once', () => {
     expect(new Set([...STARTER_CARDS, ...LEVEL_UNLOCKS]).size).toBe(CARD_IDS.length);
     expect(STARTER_CARDS.length + LEVEL_UNLOCKS.length).toBe(CARD_IDS.length);
-    for (const c of LEVEL_UNLOCKS) expect(unlockLevel(c)).toBeGreaterThanOrEqual(FIRST_UNLOCK_LEVEL);
+    for (const c of LEVEL_UNLOCKS) {
+      expect(unlockLevel(c)).toBeGreaterThanOrEqual(FIRST_UNLOCK_LEVEL);
+      expect(unlockLevel(c)).toBeLessThanOrEqual(LAST_UNLOCK_LEVEL);
+    }
+    // Most of the roster from the start; nothing waits past level 6.
+    expect(STARTER_CARDS.length).toBe(15);
+    expect(LAST_UNLOCK_LEVEL).toBe(6);
     expect(unlockLevel('pikachu')).toBeNull();
   });
 
@@ -57,6 +63,17 @@ describe('card unlocks', () => {
     for (let l = 1; l < FIRST_UNLOCK_LEVEL; l++) xp += xpToNext(l);
     expect(unlockedCards({ ...emptyProgress(), xp }).has(LEVEL_UNLOCKS[0]!)).toBe(true);
     expect(unlockedCards({ ...emptyProgress(), xp: xp - 1 }).has(LEVEL_UNLOCKS[0]!)).toBe(false);
+  });
+
+  it('owns every card at level 6, and the legendaries only from then', () => {
+    let xp = 0;
+    for (let l = 1; l < LAST_UNLOCK_LEVEL; l++) xp += xpToNext(l);
+    expect(unlockedCards({ ...emptyProgress(), xp }).size).toBe(CARD_IDS.length);
+    const before = unlockedCards({ ...emptyProgress(), xp: xp - 1 });
+    expect(before.size).toBe(CARD_IDS.length - 3);
+    for (const c of ['moltres', 'articuno', 'zapdos'] as const) expect(before.has(c)).toBe(false);
+    // Level 6 is about 1,000 XP: roughly 20-25 battles with quests and first wins.
+    expect(xp).toBe(1000);
   });
 });
 
@@ -87,7 +104,9 @@ describe('League', () => {
   it('first clears unlock cards and pay; better runs add stars', () => {
     const first = applyBattle(emptyProgress(), win({ stage: 'brock', towersLost: 1 }), DAY, 'P');
     expect(first.stars).toEqual({ stage: 'brock', before: 0, after: 1 });
-    expect(first.unlocked.sort()).toEqual(['geodude', 'golem']);
+    // Brock's own card, plus level 2's batch: the clear's XP alone reaches level 2.
+    expect(first.levelAfter).toBe(2);
+    expect(first.unlocked.sort()).toEqual(['golem', 'koffing', 'starmie']);
     expect(first.rewards.map((r) => r.text)).toContain('Boulder Badge!');
     const again = applyBattle(first.progress, win({ stage: 'brock', crowns: 3 }), DAY, 'P');
     expect(again.stars).toEqual({ stage: 'brock', before: 1, after: 3 });
@@ -160,8 +179,9 @@ describe('daily rewards', () => {
     const near = { ...emptyProgress(), xp: xpToNext(1) + xpToNext(2) - 1 };
     const r = applyBattle(near, win(), DAY, 'P');
     expect(r.levelBefore).toBe(2);
-    expect(r.levelAfter).toBeGreaterThanOrEqual(3);
-    expect(r.unlocked).toContain(LEVEL_UNLOCKS[0]);
+    expect(r.levelAfter).toBe(3);
+    // Exactly level 3's batch; level 2's was already owned.
+    expect(r.unlocked.sort()).toEqual(['mrmime', 'rapidash']);
   });
 
   it('puzzles pay once', () => {

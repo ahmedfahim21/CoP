@@ -108,7 +108,7 @@ While `pnpm dev` runs, `/sandbox.html` stages scripted fights for tuning animati
 | | |
 |---|---|
 | XP | Every battle pays XP: more for a win, plus a crown bonus, the first win of the day, a streak bonus and quests. Level *n* needs 80 + 40·*n* XP, up to level 30. |
-| Cards | New trainers start with 10 cards. The rest unlock one per trainer level from 3 to 19, and League first clears open some early. |
+| Cards | New trainers start with 15 of the 27 cards. The rest unlock in small batches at trainer levels 2 to 6 (legendaries last), and League first clears open some early. |
 | Quests | Three a day (UTC), drawn from your profile ID and the date, so they're the same on every device. |
 | Stars | 1 for beating a stage, 1 more for losing no tower, 1 more for three crowns. |
 | Seasons | Monthly. Trophies above 1,000 are halved and top finishes are kept on the profile. |

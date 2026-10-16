@@ -38,22 +38,22 @@ export const STAGES: readonly Stage[] = [
   {
     id: 'brock', order: 1, leader: 'Brock', title: 'Pewter Gym', badge: 'Boulder Badge', type: 'rock',
     deck: ['geodude', 'golem', 'dugtrio', 'machop', 'rattata', 'primeape', 'snorlax', 'zubat'], starters: ['bulbasaur', 'squirtle'],
-    skill: 0.1, twist: 'Rock solid: his towers have 40% more HP.', hint: 'Water and fighting crack rock: Lapras and Machop hit his team hard.', foe: { towerHp: 1.4 }, long: false, unlocks: ['geodude', 'golem'],
+    skill: 0.1, twist: 'Rock solid: his towers have 40% more HP.', hint: 'Water and fighting crack rock: Lapras and Machop hit his team hard.', foe: { towerHp: 1.4 }, long: false, unlocks: ['golem'],
   },
   {
     id: 'misty', order: 2, leader: 'Misty', title: 'Cerulean Gym', badge: 'Cascade Badge', type: 'water',
     deck: ['starmie', 'magikarp', 'zubat', 'pikachu', 'chansey', 'voltorb', 'rattata', 'machop'], starters: ['squirtle', 'bulbasaur'],
-    skill: 0.05, twist: 'Rain dance: her troops have 10% more HP.', hint: 'Electric beats water: Pikachu and Voltorb shine here.', foe: { unitHp: 1.1 }, long: false, unlocks: ['starmie', 'chansey'],
+    skill: 0.05, twist: 'Rain dance: her troops have 10% more HP.', hint: 'Electric beats water: Pikachu and Voltorb shine here.', foe: { unitHp: 1.1 }, long: false, unlocks: ['starmie'],
   },
   {
     id: 'surge', order: 3, leader: 'Lt. Surge', title: 'Vermilion Gym', badge: 'Thunder Badge', type: 'electric',
     deck: ['jolteon', 'magneton', 'pikachu', 'voltorb', 'zapdos', 'machop', 'snorlax', 'rattata'], starters: ['charmander', 'squirtle'],
-    skill: 0.25, twist: 'Overcharged: his troops move 15% faster.', hint: 'Ground is immune to electric: Geodude and Golem shrug off his shocks.', foe: { unitSpeed: 1.15 }, long: false, unlocks: ['jolteon', 'magneton'],
+    skill: 0.25, twist: 'Overcharged: his troops move 15% faster.', hint: 'Ground is immune to electric: Geodude and Golem shrug off his shocks.', foe: { unitSpeed: 1.15 }, long: false, unlocks: ['magneton'],
   },
   {
     id: 'erika', order: 4, leader: 'Erika', title: 'Celadon Gym', badge: 'Rainbow Badge', type: 'grass',
     deck: ['scyther', 'chansey', 'tauros', 'zubat', 'koffing', 'mrmime', 'rattata', 'lapras'], starters: ['bulbasaur', 'charmander'],
-    skill: 0.45, twist: 'Sweet scent: her elixir flows 15% faster.', hint: 'Fire and flying burn through her team: Charizard is your friend.', foe: { elixirRate: 1.15 }, long: false, unlocks: ['scyther', 'tauros'],
+    skill: 0.45, twist: 'Sweet scent: her elixir flows 15% faster.', hint: 'Fire and flying burn through her team: Charizard is your friend.', foe: { elixirRate: 1.15 }, long: false, unlocks: ['tauros'],
   },
   {
     id: 'koga', order: 5, leader: 'Koga', title: 'Fuchsia Gym', badge: 'Soul Badge', type: 'poison',
@@ -75,7 +75,7 @@ export const STAGES: readonly Stage[] = [
     id: 'giovanni', order: 8, leader: 'Giovanni', title: 'Viridian Gym', badge: 'Earth Badge', type: 'ground',
     deck: ['dugtrio', 'golem', 'geodude', 'hitmonlee', 'tauros', 'snorlax', 'gengar', 'zubat'], starters: ['bulbasaur', 'charmander'],
     skill: 0.7, twist: 'Earthquake: his towers and troops have 15% more HP.', hint: 'Water and ice break the ground: Lapras and Starmie.', foe: { towerHp: 1.15, unitHp: 1.15 },
-    long: false, unlocks: ['dugtrio'],
+    long: false, unlocks: [],
   },
   {
     id: 'lorelei', order: 9, leader: 'Lorelei', title: 'Elite Four', badge: 'Ice Crest', type: 'ice',

@@ -47,7 +47,7 @@ describe('profiles', () => {
 
   it('only accepts decks of unlocked cards', async () => {
     const { profile } = await store.create('Newbie');
-    const locked: CardId[] = ['magikarp', 'geodude', 'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'snorlax'];
+    const locked: CardId[] = ['magikarp', 'golem', 'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'snorlax'];
     expect((await store.update(profile.id, { deck: locked })).rejected).toEqual(['deck']);
     await store.updateProgress(profile.id, (p) => ({ progress: { ...p, stars: { brock: 1 } }, result: null }));
     expect((await store.update(profile.id, { deck: locked })).rejected).toEqual([]);

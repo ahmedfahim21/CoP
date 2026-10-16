@@ -79,23 +79,30 @@ export function levelFor(xp: number): LevelInfo {
 
 // ---------------------------------------------------------------- cards
 
-/** What every new trainer owns: the classic deck plus two. */
-export const STARTER_CARDS: readonly CardId[] = [...DEFAULT_DECK, 'magikarp', 'primeape'];
+/** What every new trainer owns: the classic deck plus seven, so specials show up from the first battle. */
+export const STARTER_CARDS: readonly CardId[] = [
+  ...DEFAULT_DECK, 'magikarp', 'primeape', 'geodude', 'scyther', 'jolteon', 'dugtrio', 'chansey',
+];
 
 /**
- * The rest, in the order trainer levels unlock them (level 3, 4, 5, …). The League unlocks
- * the same cards sooner: each stage's first clear grants its own.
+ * The rest unlock in small batches by trainer level, every card by level 6 (about 1,000 XP);
+ * the legendaries come last. The League unlocks them sooner: each stage's first clear grants its own.
  */
-export const LEVEL_UNLOCKS: readonly CardId[] = [
-  'geodude', 'starmie', 'jolteon', 'scyther', 'koffing', 'mrmime', 'rapidash', 'dugtrio', 'golem',
-  'chansey', 'magneton', 'tauros', 'gengar', 'hitmonlee', 'moltres', 'articuno', 'zapdos',
+export const UNLOCK_SCHEDULE: ReadonlyArray<{ level: number; cards: readonly CardId[] }> = [
+  { level: 2, cards: ['starmie', 'koffing'] },
+  { level: 3, cards: ['mrmime', 'rapidash'] },
+  { level: 4, cards: ['tauros', 'magneton', 'golem'] },
+  { level: 5, cards: ['gengar', 'hitmonlee'] },
+  { level: 6, cards: ['moltres', 'articuno', 'zapdos'] },
 ];
-export const FIRST_UNLOCK_LEVEL = 3;
+/** Every level-locked card, in unlock order. */
+export const LEVEL_UNLOCKS: readonly CardId[] = UNLOCK_SCHEDULE.flatMap((u) => u.cards);
+export const FIRST_UNLOCK_LEVEL = UNLOCK_SCHEDULE[0]!.level;
+export const LAST_UNLOCK_LEVEL = UNLOCK_SCHEDULE[UNLOCK_SCHEDULE.length - 1]!.level;
 
 /** The level that unlocks `card` (null for starter cards). */
 export function unlockLevel(card: CardId): number | null {
-  const i = LEVEL_UNLOCKS.indexOf(card);
-  return i < 0 ? null : FIRST_UNLOCK_LEVEL + i;
+  return UNLOCK_SCHEDULE.find((u) => u.cards.includes(card))?.level ?? null;
 }
 
 /** The League stage that unlocks `card`, if any. */
@@ -107,9 +114,7 @@ export function unlockedCards(p: Progress): Set<CardId> {
   if (p.legacy) return new Set(CARD_IDS);
   const owned = new Set<CardId>(STARTER_CARDS);
   const { level } = levelFor(p.xp);
-  LEVEL_UNLOCKS.forEach((c, i) => {
-    if (level >= FIRST_UNLOCK_LEVEL + i) owned.add(c);
-  });
+  for (const u of UNLOCK_SCHEDULE) if (level >= u.level) for (const c of u.cards) owned.add(c);
   for (const s of STAGES) if ((p.stars[s.id] ?? 0) > 0) for (const c of s.unlocks) owned.add(c);
   return owned;
 }

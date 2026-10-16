@@ -87,7 +87,8 @@ describe('League', () => {
     const s = await summary;
     expect(s.mode).toBe('league');
     expect(s.adventure?.stage).toEqual({ id: 'brock', starsBefore: 0, starsAfter: 3 });
-    expect(s.teams[0].rewards?.unlocked.sort()).toEqual(['geodude', 'golem']);
+    // Brock's own card, plus level 2's batch: the clear's XP alone reaches level 2.
+    expect(s.teams[0].rewards?.unlocked.sort()).toEqual(['golem', 'koffing', 'starmie']);
     expect(s.teams[0].rewards?.rewards.map((r) => r.text)).toContain('Boulder Badge!');
     expect((await store.own(me.profile.id))!.progress.stars).toEqual({ brock: 3 });
     // Misty is open now.
