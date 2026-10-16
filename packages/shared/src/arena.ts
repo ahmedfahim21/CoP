@@ -63,5 +63,14 @@ export function isValidDeploy(local: Point, openPockets: ReadonlySet<Lane>): boo
 }
 
 export function dist(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
+}
+
+/**
+ * Length of (x, y). Math.hypot isn't required to round the same way in every JS engine,
+ * but sqrt and arithmetic are, so this keeps the simulation bit-identical everywhere
+ * (replays recorded on the server play back the same in any browser).
+ */
+export function hypot(x: number, y: number): number {
+  return Math.sqrt(x * x + y * y);
 }

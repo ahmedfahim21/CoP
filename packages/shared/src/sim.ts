@@ -1,6 +1,6 @@
 import {
   ARENA_H, ARENA_W, BRIDGE_HALF_WIDTH, BRIDGE_XS, KING_POS, PRINCESS_POS, RIVER_BOTTOM, RIVER_TOP,
-  dist, inRiver, isValidDeploy, laneOf, mirror, onBridgeColumn, riverSide,
+  dist, hypot, inRiver, isValidDeploy, laneOf, mirror, onBridgeColumn, riverSide,
   type Lane, type Point, type Team,
 } from './arena.js';
 import { CARDS, DEFAULT_DECK, FORMS, unitStats, type Ability, type CardId, type CombatStats, type FormId, type UnitId } from './cards.js';
@@ -26,6 +26,28 @@ export interface MatchRules {
   towerHpScale: number;
   /** Equal crowns after overtime: the healthier weakest tower wins (true), or it's a draw. */
   tiebreak: boolean;
+  /** Per-team handicaps and boosts (gym twists, event modes); omitted means none. */
+  teams?: readonly [Partial<TeamMods>, Partial<TeamMods>];
+}
+
+/**
+ * Multipliers one side plays with. Unit modifiers apply to its troops only (towers keep
+ * their stats); `towerHp` stacks with the rules' `towerHpScale`.
+ */
+export interface TeamMods {
+  towerHp: number;
+  elixirRate: number;
+  startElixir: number;
+  unitHp: number;
+  unitDamage: number;
+  unitSpeed: number;
+}
+
+export const NO_MODS: TeamMods = { towerHp: 1, elixirRate: 1, startElixir: ELIXIR_START, unitHp: 1, unitDamage: 1, unitSpeed: 1 };
+
+export function modsOf(state: Pick<MatchState, 'rules'>, team: Team): TeamMods {
+  const m = state.rules.teams?.[team];
+  return m ? { ...NO_MODS, ...m } : NO_MODS;
 }
 
 export const STANDARD_RULES: MatchRules = {
@@ -219,8 +241,9 @@ type EntitySeed = Pick<Entity, 'team' | 'kind' | 'defId' | 'x' | 'y' | 'deployTi
 function addEntity(state: MatchState, seed: EntitySeed): Entity {
   const stats = statsOf(seed);
   const a = stats.ability;
+  const hp = seed.kind === 'unit' ? Math.round(stats.hp * modsOf(state, seed.team).unitHp) : stats.hp;
   const e: Entity = {
-    ...seed, id: newId(state), hp: stats.hp, maxHp: stats.hp, cooldown: stats.hitSpeed * 0.5, targetId: null,
+    ...seed, id: newId(state), hp, maxHp: hp, cooldown: stats.hitSpeed * 0.5, targetId: null,
     hidden: a?.kind === 'dig', stun: 0, slow: 0, slowFactor: 1, charge: 0, rampTarget: null, rampHits: 0,
     abilityTimer: a?.kind === 'heal' ? a.every : a?.kind === 'evolve' ? a.after : 0,
     shield: a?.kind === 'shield' ? a.hp : 0, enraged: false, jump: null, jumpCooldown: 0,
@@ -246,6 +269,7 @@ export function createMatch(
     events: [],
     rules,
   };
+  for (const team of [0, 1] as const) state.players[team].elixir = modsOf(state, team).startElixir;
   for (const team of [0, 1] as const) {
     const deck = shuffled(state, decks[team]);
     state.players[team].hand = deck.slice(0, HAND_SIZE);
@@ -258,7 +282,7 @@ export function createMatch(
       addEntity(state, { team, kind: 'princess', defId: starters[team][i]!, ...p, deployTimer: 0, active: true, lane });
     });
   }
-  for (const t of state.entities) t.hp = t.maxHp = Math.round(t.maxHp * rules.towerHpScale);
+  for (const t of state.entities) t.hp = t.maxHp = Math.round(t.maxHp * rules.towerHpScale * modsOf(state, t.team).towerHp);
   return state;
 }
 
@@ -354,7 +378,9 @@ export function step(state: MatchState, dt: number): void {
   }
 
   const rate = isDoubleElixir(state) ? ELIXIR_PER_SECOND * 2 : ELIXIR_PER_SECOND;
-  for (const p of state.players) p.elixir = Math.min(ELIXIR_MAX, p.elixir + rate * dt);
+  state.players.forEach((p, team) => {
+    p.elixir = Math.min(ELIXIR_MAX, p.elixir + rate * modsOf(state, team as Team).elixirRate * dt);
+  });
 
   const byId = new Map(state.entities.map((e) => [e.id, e]));
   for (const e of [...state.entities]) {
@@ -490,8 +516,8 @@ function evolveInto(state: MatchState, e: Entity, into: FormId) {
   const stats = FORMS[into].stats;
   e.defId = into;
   // Evolution is a reward for surviving: the new form arrives at full strength.
-  e.maxHp = stats.hp;
-  e.hp = stats.hp;
+  e.maxHp = Math.round(stats.hp * modsOf(state, e.team).unitHp);
+  e.hp = e.maxHp;
   e.cooldown = stats.hitSpeed * 0.5;
   e.targetId = null;
   e.abilityTimer = 0;
@@ -581,7 +607,7 @@ function updateUnit(state: MatchState, unit: Entity, byId: Map<string, Entity>, 
   const charge = abilityOf(unit, 'charge');
   const rage = abilityOf(unit, 'rage');
   const wasCharging = isCharging(unit);
-  const speed = stats.speed * (wasCharging && charge ? charge.speedMult : 1) * (rage && unit.enraged ? rage.speedMult : 1);
+  const speed = stats.speed * (wasCharging && charge ? charge.speedMult : 1) * (rage && unit.enraged ? rage.speedMult : 1) * modsOf(state, unit.team).unitSpeed;
   const moved = moveToward(unit, steerAround(state, unit, nextWaypoint(unit, target), target), speed * dt);
   if (charge) {
     unit.charge += moved;
@@ -618,7 +644,7 @@ function steerAround(state: MatchState, unit: Entity, to: Point, target: Entity)
   if (stats.flying) return to;
   const dx = to.x - unit.x;
   const dy = to.y - unit.y;
-  const len = Math.hypot(dx, dy);
+  const len = hypot(dx, dy);
   if (len < 1e-6) return to;
   const ux = dx / len;
   const uy = dy / len;
@@ -742,7 +768,7 @@ function applyDamage(state: MatchState, source: Pick<Entity, 'team' | 'kind' | '
   const stun = abilityOf(source, 'stun');
   const slow = abilityOf(source, 'slow');
   for (const v of victims) {
-    hurt(state, v, Math.round(stats.damage * mult * typeMultiplier(stats.move.type, statsOf(v).types)), stats.move.type, stun ? 'stun' : slow ? 'slow' : undefined);
+    hurt(state, v, Math.round(stats.damage * mult * troopPower(state, source) * typeMultiplier(stats.move.type, statsOf(v).types)), stats.move.type, stun ? 'stun' : slow ? 'slow' : undefined);
     if (stun) {
       v.stun = Math.max(v.stun, stun.seconds);
       v.charge = 0;
@@ -772,8 +798,13 @@ function hurt(state: MatchState, v: Entity, damage: number, moveType: PokeType, 
 function blast(state: MatchState, team: Team, at: Point, radius: number, damage: number, moveType: PokeType) {
   for (const v of state.entities) {
     if (v.team === team || v.hp <= 0 || dist(v, at) - statsOf(v).radius > radius) continue;
-    hurt(state, v, Math.round(damage * typeMultiplier(moveType, statsOf(v).types)), moveType);
+    hurt(state, v, Math.round(damage * modsOf(state, team).unitDamage * typeMultiplier(moveType, statsOf(v).types)), moveType);
   }
+}
+
+/** Damage multiplier for hits from `source`: troops carry their side's modifier, towers don't. */
+function troopPower(state: MatchState, source: Pick<Entity, 'team' | 'kind'>): number {
+  return source.kind === 'unit' ? modsOf(state, source.team).unitDamage : 1;
 }
 
 function splashCanHit(stats: CombatStats, e: Entity): boolean {
@@ -796,7 +827,7 @@ function updateProjectiles(state: MatchState, byId: Map<string, Entity>, dt: num
     }
     const source = { team: p.team, kind: kindOfDef(p.sourceDefId), defId: p.sourceDefId };
     const speed = statsOf(source).projectileSpeed;
-    const d = Math.hypot(p.tx - p.x, p.ty - p.y);
+    const d = hypot(p.tx - p.x, p.ty - p.y);
     if (d <= speed * dt) {
       const hasSplash = statsOf(source).splashRadius > 0;
       if (alive || hasSplash) applyDamage(state, source, alive ? target : null, { x: p.tx, y: p.ty });
@@ -836,7 +867,7 @@ function distToSegment(pt: Point, a: Point, b: Point): number {
   const vy = b.y - a.y;
   const len2 = vx * vx + vy * vy;
   const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((pt.x - a.x) * vx + (pt.y - a.y) * vy) / len2));
-  return Math.hypot(pt.x - (a.x + vx * t), pt.y - (a.y + vy * t));
+  return hypot(pt.x - (a.x + vx * t), pt.y - (a.y + vy * t));
 }
 
 /** Poison clouds pulse damage to every enemy inside, towers and fliers included. */
@@ -848,7 +879,7 @@ function updateZones(state: MatchState, dt: number): void {
     z.tick += ZONE_TICK;
     for (const v of state.entities) {
       if (v.team === z.team || v.hp <= 0 || dist(v, z) - statsOf(v).radius > z.radius) continue;
-      hurt(state, v, Math.round(z.dps * ZONE_TICK * typeMultiplier(z.type, statsOf(v).types)), z.type);
+      hurt(state, v, Math.round(z.dps * ZONE_TICK * modsOf(state, z.team).unitDamage * typeMultiplier(z.type, statsOf(v).types)), z.type);
     }
   }
   state.zones = state.zones.filter((z) => z.timeLeft > 0);
@@ -895,7 +926,7 @@ function separate(state: MatchState): void {
 function pushApart(a: Entity, b: Entity, minDist: number, shareA: number): void {
   let dx = a.x - b.x;
   let dy = a.y - b.y;
-  let d = Math.hypot(dx, dy);
+  let d = hypot(dx, dy);
   if (d >= minDist) return;
   if (d < 1e-6) {
     // Deterministic nudge for exactly stacked entities.
@@ -903,7 +934,7 @@ function pushApart(a: Entity, b: Entity, minDist: number, shareA: number): void 
     dy = 0;
     d = 1;
   }
-  const overlap = minDist - Math.hypot(a.x - b.x, a.y - b.y);
+  const overlap = minDist - hypot(a.x - b.x, a.y - b.y);
   const nx = dx / d;
   const ny = dy / d;
   a.x += nx * overlap * shareA;

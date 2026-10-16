@@ -446,3 +446,23 @@ describe('match rules', () => {
   });
 });
 
+
+describe('team modifiers', () => {
+  it('scale towers, elixir and troops for one side only', () => {
+    const s = createMatch(PICKS, 1, undefined, { ...STANDARD_RULES, teams: [{ towerHp: 2, startElixir: 8 }, { unitHp: 1.5, unitDamage: 2, elixirRate: 2 }] });
+    const king0 = s.entities.find((e) => e.team === 0 && e.kind === 'king')!;
+    const king1 = s.entities.find((e) => e.team === 1 && e.kind === 'king')!;
+    expect(king0.maxHp).toBe(king1.maxHp * 2);
+    expect(s.players[0].elixir).toBe(8);
+    expect(s.players[1].elixir).toBe(5);
+    s.phase = 'regular';
+    s.timeLeft = 180;
+    s.players[0].elixir = 0;
+    s.players[1].elixir = 0;
+    step(s, 1);
+    expect(s.players[1].elixir).toBeCloseTo(s.players[0].elixir * 2, 6);
+    s.players[1].elixir = 10;
+    const [m] = spawn(s, 1, 'machop', { x: 9, y: 25 });
+    expect(m!.maxHp).toBe(Math.round(CARDS.machop.stats.hp * 1.5));
+  });
+});

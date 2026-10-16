@@ -1,4 +1,4 @@
-import { ARENA_H, ARENA_W, BRIDGE_XS, DEPLOY_MIN_Y, PRINCESS_POS, POCKET_MIN_Y, laneOf, mirror, type Lane, type Point, type Team } from './arena.js';
+import { ARENA_H, ARENA_W, BRIDGE_XS, DEPLOY_MIN_Y, PRINCESS_POS, POCKET_MIN_Y, hypot, laneOf, mirror, type Lane, type Point, type Team } from './arena.js';
 import { CARDS, type CardId } from './cards.js';
 import { ELIXIR_MAX, canDeployCard, isDoubleElixir, isStructure, openPockets, statsOf, type Entity, type MatchState } from './sim.js';
 import { typeMultiplier } from './types.js';
@@ -23,11 +23,42 @@ interface Seen {
 /** How far up the field (own perspective) an enemy counts as a threat. */
 const THREAT_LINE = 13;
 
+/** How well the bot plays. */
+export interface BotSkill {
+  /** Mean seconds between decisions; higher is easier. */
+  reaction: number;
+  /** Chance, each decision, that it notices a threat and answers it. */
+  vigilance: number;
+  /** Chance a play lands somewhere random (but legal) instead of where it planned. */
+  sloppiness: number;
+  /** Whether it backs up its own tanks with support troops. */
+  supports: boolean;
+}
+
+/** The full-strength bot (and the default). */
+export const ACE_SKILL: BotSkill = { reaction: 0.9, vigilance: 1, sloppiness: 0, supports: true };
+export const ROOKIE_SKILL: BotSkill = { reaction: 2.2, vigilance: 0.4, sloppiness: 0.4, supports: false };
+
+/** Trophies at which the ladder bot reaches full strength. */
+export const ACE_TROPHIES = 2000;
+
+/** Bot strength for a player with `trophies`: a rookie at 0, the ace from ACE_TROPHIES up. */
+export function skillForTrophies(trophies: number): BotSkill {
+  return lerpSkill(ROOKIE_SKILL, ACE_SKILL, Math.max(0, Math.min(1, trophies / ACE_TROPHIES)));
+}
+
+/** `k` = 0 is `a`, 1 is `b`. */
+export function lerpSkill(a: BotSkill, b: BotSkill, k: number): BotSkill {
+  if (k <= 0) return { ...a };
+  if (k >= 1) return { ...b };
+  const mix = (x: number, y: number) => x + (y - x) * k;
+  return { reaction: mix(a.reaction, b.reaction), vigilance: mix(a.vigilance, b.vigilance), sloppiness: mix(a.sloppiness, b.sloppiness), supports: k >= 0.5 ? b.supports : a.supports };
+}
+
 export class Bot {
   private wait: number;
 
-  /** `reaction` is the mean seconds between decisions; higher is easier. */
-  constructor(readonly team: Team, private readonly rand: () => number, private readonly reaction = 0.9) {
+  constructor(readonly team: Team, private readonly rand: () => number, readonly skill: BotSkill = ACE_SKILL) {
     // Let the battle open before the first move.
     this.wait = 1.5 + rand() * 2;
   }
@@ -37,14 +68,27 @@ export class Bot {
     if (state.phase !== 'regular' && state.phase !== 'overtime') return null;
     this.wait -= dt;
     if (this.wait > 0) return null;
-    const play = chooseBotPlay(state, this.team, this.rand);
-    this.wait = play ? this.reaction * (0.6 + 0.8 * this.rand()) : 0.35;
+    const play = chooseBotPlay(state, this.team, this.rand, this.skill);
+    this.wait = play ? this.skill.reaction * (0.6 + 0.8 * this.rand()) : 0.35;
     return play;
   }
 }
 
 /** One decision: defend what's coming, back up a push in progress, else start one when elixir is high. */
-export function chooseBotPlay(state: MatchState, team: Team, rand: () => number): BotPlay | null {
+export function chooseBotPlay(state: MatchState, team: Team, rand: () => number, skill: BotSkill = ACE_SKILL): BotPlay | null {
+  const plan = planBotPlay(state, team, rand, skill);
+  if (!plan || skill.sloppiness <= 0 || rand() >= skill.sloppiness) return plan;
+  // A fumble: same card, dropped somewhere in its own half.
+  const id = state.players[team].hand[plan.slot]!;
+  const pockets = openPockets(state, team);
+  for (let i = 0; i < 6; i++) {
+    const spot = { x: 1 + rand() * (ARENA_W - 2), y: DEPLOY_MIN_Y + 0.5 + rand() * (ARENA_H - DEPLOY_MIN_Y - 1.5) };
+    if (canDeployCard(id, spot, pockets)) return { slot: plan.slot, ...spot };
+  }
+  return plan;
+}
+
+function planBotPlay(state: MatchState, team: Team, rand: () => number, skill: BotSkill): BotPlay | null {
   const me = state.players[team];
   const seen = state.entities.filter((e) => e.hp > 0).map((e): Seen => ({ e, ...mirror(team, e) }));
   const mine = seen.filter((s) => s.e.team === team && s.e.kind === 'unit');
@@ -59,14 +103,14 @@ export function chooseBotPlay(state: MatchState, team: Team, rand: () => number)
     return canDeployCard(id, at, pockets) ? { slot, ...at } : null;
   };
 
-  if (threats.length > 0) {
+  if (threats.length > 0 && (skill.vigilance >= 1 || rand() < skill.vigilance)) {
     const defence = defend(threats, mine, affordable, legal, rand);
     if (defence) return defence;
   }
 
   // A tank walking up to the bridge is the moment to commit support behind it.
   const tank = mine.find((m) => isTank(m.e.defId as CardId) && m.y > DEPLOY_MIN_Y && m.y < 26);
-  if (tank && me.elixir >= 4) {
+  if (tank && skill.supports && me.elixir >= 4) {
     const support = affordable
       .filter(({ id }) => !isTank(id) && CARDS[id].stats.ability?.kind !== 'building' && CARDS[id].stats.ability?.kind !== 'dig')
       .sort((a, b) => supportValue(b.id) - supportValue(a.id))[0];
@@ -93,9 +137,9 @@ type Legal = (slot: number, id: CardId, p: Point) => BotPlay | null;
 function defend(threats: Seen[], mine: Seen[], hand: Array<{ id: CardId; slot: number }>, legal: Legal, rand: () => number): BotPlay | null {
   // The deepest threat is the most urgent.
   const lead = threats.reduce((a, b) => (b.y > a.y ? b : a));
-  const near = threats.filter((t) => Math.hypot(t.x - lead.x, t.y - lead.y) < 4);
+  const near = threats.filter((t) => hypot(t.x - lead.x, t.y - lead.y) < 4);
   const threatHp = near.reduce((sum, t) => sum + t.e.hp, 0);
-  const defenders = mine.filter((m) => Math.hypot(m.x - lead.x, m.y - lead.y) < 6 && !isStructure(m.e) && statsOf(m.e).targets !== 'buildings');
+  const defenders = mine.filter((m) => hypot(m.x - lead.x, m.y - lead.y) < 6 && !isStructure(m.e) && statsOf(m.e).targets !== 'buildings');
   const defenderHp = defenders.reduce((sum, d) => sum + d.e.hp, 0);
   // Already handled, or only a straggler the towers will deal with.
   if (defenderHp >= threatHp * 0.8) return null;
