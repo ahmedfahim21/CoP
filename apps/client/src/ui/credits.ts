@@ -1,4 +1,5 @@
-import { h } from './dom.js';
+import { h, icon } from './dom.js';
+import { Info } from './icons.js';
 
 interface Credit {
   name: string;
@@ -35,6 +36,13 @@ const SECTIONS: Array<{ title: string; items: Credit[] }> = [
     ],
   },
 ];
+
+/** The ⓘ that opens the credits. */
+export function creditsButton(): HTMLButtonElement {
+  const b = h('button', { class: 'info-btn', attrs: { 'aria-label': 'Credits', title: 'Credits' } }, icon(Info));
+  b.addEventListener('click', showCredits);
+  return b;
+}
 
 /** The credits: who made the game and whose work it stands on. */
 export function showCredits() {

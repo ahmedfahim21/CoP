@@ -1,4 +1,4 @@
-import { Bot, Calendar, Copy, Crown, Flame, Key, Medal, Refresh, Replay, Route, Swords, Trophy, Users } from './icons.js';
+import { Bot, Calendar, Copy, Crown, Flame, Key, Medal, Play, Refresh, Route, Swords, Trophy, Users } from './icons.js';
 import {
   STAGES, arenaFor, levelFor, nextArena, winRate,
   type LeaderboardEntry, type MatchRecord, type ProfileStats, type PublicProfile, type ScoreboardResponse, type Team,
@@ -63,7 +63,7 @@ function matchList(matches: MatchRecord[], onReplay?: OnReplay): HTMLElement {
     const when = new Date(m.playedAt);
     let watch: HTMLButtonElement | null = null;
     if (onReplay && m.hasReplay) {
-      watch = h('button', { class: 'replay-btn', attrs: { 'aria-label': 'Watch replay' } }, icon(Replay));
+      watch = h('button', { class: 'replay-btn', attrs: { 'aria-label': 'Watch replay', title: 'Watch replay' } }, icon(Play));
       watch.addEventListener('click', () => onReplay(m.id, (m.team ?? 0) as Team));
     }
     return h('li', { class: `match-row ${m.outcome}${watch ? ' has-replay' : ''}` },
@@ -73,7 +73,7 @@ function matchList(matches: MatchRecord[], onReplay?: OnReplay): HTMLElement {
         h('div', { class: 'plate-sub', textContent: `${MODE_LABEL[m.mode]}${m.reason === 'tiebreak' ? ' · Tower health' : ''} · ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` }),
       ),
       h('div', { class: 'match-crowns stroke' }, icon(Crown), `${m.crowns}–${m.opponentCrowns}`),
-      m.mode === 'ranked' || m.mode === 'ghost' ? deltaPill(m.delta) : h('div', { class: 'delta' }, icon(m.opponent.id ? Users : Bot)),
+      m.mode === 'ranked' || m.mode === 'ghost' ? deltaPill(m.delta) : h('div', { class: 'delta opponent-kind', attrs: { title: m.opponent.id ? 'Against a trainer' : 'Against the bot' } }, icon(m.opponent.id ? Users : Bot)),
       watch,
     );
   }));
@@ -278,7 +278,7 @@ export class ProfilePanel {
       const retry = h('button', { class: 'btn small' }, icon(Refresh, 'btn-icon'), ' Retry');
       retry.addEventListener('click', () => void this.profiles.connect());
       this.el.replaceChildren(
-        h('h2', { textContent: 'Trainer Profile' }),
+        profileHeading(null),
         status === 'loading'
           ? h('div', { class: 'spinner' })
           : h('div', { class: 'panel' },
@@ -291,9 +291,7 @@ export class ProfilePanel {
     }
     const parts: Array<HTMLElement | null> = [
       // Name, portrait, rank and trophies are already in the top bar; only the tag is new here.
-      h('div', { class: 'profile-heading' },
-        h('h2', { textContent: 'Trainer Profile' }),
-        h('div', { class: 'profile-tag', textContent: `#${profile.id}` })),
+      profileHeading(profile.id),
       xpBar(profile.progress.xp),
       arenaProgress(profile.trophies),
       adventureSummary(profile),
@@ -344,4 +342,11 @@ export class ProfilePanel {
       error,
     );
   }
+}
+
+/** "Trainer Profile", and the player tag once the profile is known. */
+function profileHeading(tag: string | null): HTMLDivElement {
+  return h('div', { class: 'profile-heading' },
+    h('h2', { textContent: 'Trainer Profile' }),
+    tag ? h('div', { class: 'profile-tag', textContent: `#${tag}` }) : null);
 }
