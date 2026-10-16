@@ -26,7 +26,7 @@ Clash Royale–style Pokémon battles, live in your browser. Your king tower is 
   - **Puzzles**: six handcrafted setups that run fully in the browser.
 - **Progression**: trainer XP and levels, daily quests, win streaks, and card unlocks by level or League badge. Profiles from before this update keep every card.
 - **Replays**: every battle is recorded (a seed plus the plays) and can be rewatched from match history or shared by link.
-- **Monthly seasons**: on the 1st, trophies above 1,000 are halved and the final standings go on each profile.
+- **Monthly seasons**: on the 1st, each trainer's final trophies and rank go on their profile.
 - **27 Pokémon cards** with Clash Royale–style specialities (evolution, digging, invisibility, healing, chain lightning…) and the real type chart.
 - **Starter towers**: pick two of Bulbasaur, Charmander and Squirtle to guard your side.
 - **3D arena** with Blender-built, animated models, cel shading and ink outlines.

@@ -233,7 +233,7 @@ describe('replays', () => {
 });
 
 describe('seasons', () => {
-  it('the first call only records the season; a new month archives and softly resets', async () => {
+  it('the first call only records the season; a new month archives final standings', async () => {
     const top = (await store.create('Top')).profile.id;
     const low = (await store.create('Low')).profile.id;
     for (let i = 0; i < 3; i++) await store.recordMatch(ranked(top, low, 0));
@@ -245,10 +245,11 @@ describe('seasons', () => {
     expect(res).toMatchObject({ rolled: true, season: '2026-11', ended: '2026-10', trainers: 2 });
     expect((await store.get(top))!.seasons).toEqual([{ season: '2026-10', trophies: before, rank: 1 }]);
     expect((await store.get(low))!.seasons).toEqual([{ season: '2026-10', trophies: 0, rank: 2 }]);
+    expect((await store.get(top))!.trophies).toBe(before);
     expect((await store.seasonRollover(Date.UTC(2026, 10, 3))).rolled).toBe(false);
   });
 
-  it('halves trophies above the floor', async () => {
+  it('leaves trophies as they are, even far above 1000', async () => {
     const id = (await store.create('Pro')).profile.id;
     await store['db'].call('cop_record_battle', {
       p_mode: 'ranked', p_winner: 0, p_reason: 'crowns', p_replay: null, p_now: 1,
@@ -256,6 +257,6 @@ describe('seasons', () => {
     });
     await store.seasonRollover(Date.UTC(2026, 9, 1));
     await store.seasonRollover(Date.UTC(2026, 10, 1));
-    expect((await store.get(id))!.trophies).toBe(1500);
+    expect((await store.get(id))!.trophies).toBe(2000);
   });
 });

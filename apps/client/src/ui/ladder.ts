@@ -151,7 +151,7 @@ export function showProfileModal(id: string, mine: boolean) {
 type Board = 'trophies' | ScoreboardResponse['board'];
 
 const BOARD_HINT: Record<Board, string> = {
-  trophies: 'Ranked and ghost battles move trophies. League, training and friendly battles never do. Trophies above 1000 halve towards it each new month.',
+  trophies: 'Ranked and ghost battles move trophies. League, training and friendly battles never do.',
   daily: 'Today’s Daily Challenge: everyone plays the same deck. Resets at midnight UTC.',
   gauntlet: 'Furthest Gauntlet run this month.',
 };

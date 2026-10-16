@@ -39,8 +39,6 @@ export interface Ghost {
 
 /** Trainers count as recently active, for ghosts, for this long. */
 export const GHOST_ACTIVE_MS = 30 * 86_400_000;
-/** Seasons: trophies above this are halved towards it when a new month starts. */
-export const SEASON_FLOOR = 1000;
 
 /** Per-side outcome of recording a match. */
 export interface RecordedSide {
@@ -232,10 +230,10 @@ export class ProfileStore {
     return this.db.call<ReplayResponse | null>('cop_replay', { p_match_id: matchId });
   }
 
-  /** Starts a new ladder season if the month has turned (see cop_season_rollover). */
+  /** Starts a new ladder season if the month has turned, archiving final standings (see cop_season_rollover). */
   seasonRollover(now = Date.now()) {
     return this.db.call<{ rolled: boolean; season: string; ended?: string; trainers?: number }>('cop_season_rollover', {
-      p_season: seasonKey(now), p_floor: SEASON_FLOOR,
+      p_season: seasonKey(now),
     });
   }
 
