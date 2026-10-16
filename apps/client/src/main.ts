@@ -6,7 +6,7 @@ import { ProfileSession } from './profile.js';
 import { adventure, createPrivate, joinByCode, rankedSearch, takeSeat, training, type Loadout, type Search, type Session } from './net.js';
 import { bootModels } from './ui/boot.js';
 import { askTrainerName } from './ui/intro.js';
-import { Home } from './ui/home.js';
+import { Home, type Tab } from './ui/home.js';
 import { BattleHud } from './ui/hud.js';
 import { QUEUE_MODES, ResultScreen, matchmakingOverlay } from './ui/overlays.js';
 import { playPuzzle } from './ui/puzzle.js';
@@ -255,7 +255,8 @@ function showResult(s: Session) {
     // A finished room can't be replayed: ranked and ghost queue again; everything else asks
     // the server for the next room (a rematch, the same stage again, the Gauntlet's next round).
     onAgain: () => (queueAgain ? void leave().then(() => connect('ranked')) : s.requestRematch()),
-    onMenu: () => backToMenu(ADVENTURE_MODES.includes(s.mode) ? 'adventure' : undefined),
+    // Back where the battle was started: the League lives on the Battle tab, the rest of single player on Adventure.
+    onMenu: () => backToMenu(s.mode === 'league' ? 'battle' : ADVENTURE_MODES.includes(s.mode) ? 'adventure' : undefined),
     onReplay: (matchId) => {
       const team = s.team ?? 0;
       void leave().then(() => openReplay(matchId, team));
@@ -309,7 +310,7 @@ async function leave() {
   }
 }
 
-function backToMenu(tab?: 'adventure') {
+function backToMenu(tab?: Tab) {
   attempt++;
   stopSearch();
   void leave();

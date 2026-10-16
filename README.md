@@ -18,8 +18,8 @@ Clash Royale–style Pokémon battles, live in your browser. Your king tower is 
 
 - **Real-time multiplayer**: a ranked ladder with trophies across ten Kanto arenas, friendly rooms by invite code, and a training bot.
 - **Ghost battles**: when nobody else is searching, the queue matches you against a real trainer's deck, played by a bot that fights at their trophy level. Ghosts move trophies at half rate.
-- **Adventure**: the single-player hub.
-  - **Kanto League**: 8 gyms, the Elite Four and Champion Blue, each with its own deck and twist. Earn up to 3 stars per stage.
+- **Kanto League** (on the Battle tab): 8 gyms, the Elite Four and Champion Blue, each with its own deck and twist. Earn up to 3 stars per stage.
+- **Adventure**: the rest of single player.
   - **Daily Challenge**: the same seed, deck and rules for everyone, with a daily scoreboard.
   - **Weekly events**: a rotating mode (Triple Elixir, Mirror Match, Chaos, Sudden Death, Giants, Draft).
   - **Gauntlet**: back-to-back rounds against tougher bots, with tower damage carried between rounds and a season leaderboard.

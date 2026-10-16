@@ -1,4 +1,4 @@
-import { Bot, Copy, Crown, Dumbbell, Ghost, Gift, Replay, Star, Swords, Tick, Trophy, Users } from './icons.js';
+import { Copy, Crown, Dumbbell, Ghost, Gift, Replay, Star, Swords, Tick, Trophy, Users } from './icons.js';
 import { STAGES, stageById, type BattleStats, type MatchMode, type QueueStatusMessage, type RematchStateMessage, type SummaryMessage, type Team } from '@cop/shared';
 import { cardEl } from './cards.js';
 import { h, icon } from './dom.js';

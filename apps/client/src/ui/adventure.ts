@@ -1,14 +1,14 @@
 import {
-  CARDS, DRAFT_PICKS, EVENT_BONUS_WINS, PUZZLES, ROLE_NAMES, STAGES, cardInfo, currentEvent, dailyChallenge, dayKey, draftOffers, draftSeed,
-  nextStage, stageOpen, weekKey, withTodaysQuests,
-  type CardId, type ScoreboardResponse, type Stage,
+  CARDS, DRAFT_PICKS, EVENT_BONUS_WINS, PUZZLES, ROLE_NAMES, cardInfo, currentEvent, dailyChallenge, dayKey, draftOffers, draftSeed,
+  weekKey, withTodaysQuests,
+  type CardId, type ScoreboardResponse,
 } from '@cop/shared';
 import { api } from '../api.js';
 import type { ProfileSession } from '../profile.js';
 import { cardEl } from './cards.js';
 import { h, icon } from './dom.js';
-import { Calendar, Gift, Lock, MapIcon, Medal, Puzzle, Route, Sparkles, Swords, Tick, Trophy } from './icons.js';
-import { cardNames, questList, starList, starsEl, streakChip, xpBar } from './progress.js';
+import { Calendar, Medal, Puzzle, Route, Sparkles, Swords, Tick, Trophy } from './icons.js';
+import { questList, streakChip, xpBar } from './progress.js';
 
 export interface AdventureHooks {
   onLeague(stage: string): void;
@@ -19,8 +19,8 @@ export interface AdventureHooks {
 }
 
 /**
- * The Adventure tab: everything to do alone. Daily quests, the Kanto League, the Daily
- * Challenge, this week's event, the Gauntlet and puzzles.
+ * The Adventure tab: everything to do alone besides the League (which lives on the Battle tab).
+ * Daily quests, the Daily Challenge, this week's event, the Gauntlet and puzzles.
  */
 export class AdventurePanel {
   readonly el = h('div', { class: 'tab-panel adventure' });
@@ -40,7 +40,6 @@ export class AdventurePanel {
       h('div', { class: 'adv-head' }, xpBar(progress.xp), streakChip(progress, today)),
       ready ? null : h('div', { class: 'hint', textContent: this.profiles.status === 'loading' ? 'Loading your trainer profile…' : 'Adventure needs your trainer profile, and the game server isn’t reachable right now.' }),
       this.questsPanel(progress.quests.day === today ? progress.quests.list : []),
-      this.leaguePanel(),
       this.dailyPanel(today),
       this.eventPanel(now),
       this.gauntletPanel(),
@@ -57,61 +56,6 @@ export class AdventurePanel {
       questList(quests),
       h('div', { class: 'hint left', textContent: 'New quests every day at midnight UTC. Your first win each day pays a bonus too.' }),
     );
-  }
-
-  private leaguePanel() {
-    const p = this.profiles.progress;
-    const next = nextStage(p);
-    const map = h('div', { class: 'league-map' }, ...STAGES.map((s) => {
-      const stars = p.stars[s.id] ?? 0;
-      const open = stageOpen(p, s.id);
-      const b = h('button', { class: `stage-dot${stars > 0 ? ' cleared' : ''}${open ? '' : ' locked'}${next?.id === s.id ? ' next' : ''}`, data: { type: s.type }, attrs: { 'aria-label': `${s.leader}, ${s.title}` } },
-        h('span', { class: 'stage-num stroke', textContent: s.order <= 8 ? String(s.order) : s.order === 13 ? 'C' : 'E4' }),
-        open ? starsEl(stars) : icon(Lock),
-        h('span', { class: 'stage-name', textContent: s.leader }));
-      b.addEventListener('click', () => this.showStage(s));
-      return b;
-    }));
-    const champion = !next;
-    return h('section', { class: 'panel league' },
-      h('div', { class: 'panel-title stroke' }, icon(MapIcon), 'Kanto League',
-        h('span', { class: 'panel-aside', textContent: `${Object.values(p.stars).reduce((a, b) => a + b, 0)}/${STAGES.length * 3}` }, icon(Medal))),
-      champion
-        ? h('div', { class: 'league-next' }, h('div', { class: 'stroke', textContent: 'You are the Champion!' }), h('div', { class: 'hint left', textContent: 'Go back for any missing stars.' }))
-        : this.stageCard(next!, true),
-      map,
-    );
-  }
-
-  private stageCard(s: Stage, compact: boolean) {
-    const p = this.profiles.progress;
-    const stars = p.stars[s.id] ?? 0;
-    const open = stageOpen(p, s.id);
-    const go = h('button', { class: 'btn gold', data: { needsProfile: '' } }, icon(Swords, 'btn-icon'), stars > 0 ? ' Battle again' : ' Battle');
-    go.disabled = !open;
-    go.addEventListener('click', () => {
-      document.querySelector('.modal-backdrop')?.remove();
-      this.hooks.onLeague(s.id);
-    });
-    return h('div', { class: `league-next${compact ? '' : ' full'}`, data: { type: s.type } },
-      h('div', { class: 'league-who' },
-        h('div', { class: 'league-leader stroke', textContent: s.leader }),
-        h('div', { class: 'plate-sub', textContent: `${s.title} · ${s.badge}` }),
-        starsEl(stars)),
-      h('div', { class: 'league-twist' }, icon(Sparkles), h('span', { textContent: s.twist })),
-      h('div', { class: 'league-hint', textContent: s.hint }),
-      s.unlocks.length && stars === 0 ? h('div', { class: 'league-reward' }, icon(Gift), `First clear unlocks ${cardNames([...s.unlocks])}`) : null,
-      compact ? null : starList(stars),
-      open ? null : h('div', { class: 'hint left', textContent: `Beat ${STAGES[s.order - 2]?.leader ?? 'the previous stage'} first.` }),
-      h('div', { class: 'row' }, go),
-    );
-  }
-
-  private showStage(s: Stage) {
-    const close = h('button', { class: 'btn' }, 'Close');
-    const deck = h('div', { class: 'mini-deck' }, ...s.deck.map((c) => cardEl(c)));
-    const backdrop = modal(s.title, h('div', { class: 'stage-modal' }, this.stageCard(s, false), h('div', { class: 'section-title', textContent: 'Their deck' }), deck), close);
-    close.addEventListener('click', () => backdrop.remove());
   }
 
   private dailyPanel(today: string) {

@@ -13,6 +13,7 @@ import { api } from '../api.js';
 import { sound } from '../audio/sound.js';
 import { soundToggle } from './soundToggle.js';
 import { creditsButton } from './credits.js';
+import { LeaguePanel } from './league.js';
 
 export type Tab = 'cards' | 'adventure' | 'battle' | 'ranks' | 'profile';
 
@@ -112,7 +113,7 @@ export class Home {
     this.pollStatus(false);
   }
 
-  /** Jump to a tab (e.g. Adventure after a League battle). */
+  /** Jump to a tab (e.g. Adventure after a Daily Challenge, Battle after a League stage). */
   open(tab: Tab) {
     this.select(tab);
   }
@@ -227,6 +228,7 @@ export class Home {
       h('div', { class: 'arena-showcase' }, this.dioramaHost, h('div', { class: 'arena-label stroke' }, this.arenaName, this.arenaSub)),
       battle,
       this.online,
+      new LeaguePanel(this.profiles, (stage) => this.hooks.onLeague(stage)).el,
       h('div', { class: 'panel' },
         h('div', { class: 'row training-row' },
           h('div', { class: 'grow' },

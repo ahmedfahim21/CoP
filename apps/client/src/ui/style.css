@@ -147,7 +147,8 @@ h1, h2 { margin: 0; }
 /* --- Battle tab ---------------------------------------------------------- */
 
 .arena-showcase {
-  position: relative; flex: 1 1 auto; min-height: 220px; max-height: 420px;
+  /* A set height, not a flexible one: the Battle tab scrolls, so the arena never gets squeezed. */
+  position: relative; flex: none; height: clamp(260px, 42dvh, 400px);
   border: 3px solid var(--ink); overflow: hidden; background: #3f7d2e; box-shadow: var(--shadow-lg);
 }
 .arena-showcase .stage-host { position: absolute; inset: 0; }
@@ -717,9 +718,9 @@ h1, h2 { margin: 0; }
 /* --- Adventure tab --------------------------------------------------------- */
 
 #app[data-tab='adventure'] { background: var(--dots), #fff1c9; }
-.adventure .panel { display: flex; flex-direction: column; gap: 8px; }
-.adventure .panel .panel-title { margin-bottom: 0; }
-.adventure .panel .row > .btn { flex: 1; }
+.adventure .panel, .panel.league { display: flex; flex-direction: column; gap: 8px; }
+.adventure .panel .panel-title, .panel.league .panel-title { margin-bottom: 0; }
+.adventure .panel .row > .btn, .panel.league .row > .btn { flex: 1; }
 .adventure .panel .row > .btn.small { flex: none; }
 .daily-title { font-size: 19px; }
 
