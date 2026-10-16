@@ -28,6 +28,27 @@ export interface MatchRules {
   tiebreak: boolean;
   /** Per-team handicaps and boosts (gym twists, event modes); omitted means none. */
   teams?: readonly [Partial<TeamMods>, Partial<TeamMods>];
+  /** Towers starting part-damaged (Gauntlet rounds carry damage over); omitted is full health. */
+  startHp?: readonly [TowerHealth | null, TowerHealth | null];
+}
+
+/** Each tower's health as a fraction of its maximum. */
+export interface TowerHealth {
+  king: number;
+  left: number;
+  right: number;
+}
+
+/** A side's tower health, by tower; fallen towers read 0. */
+export function towerHealthOf(entities: Iterable<Pick<Entity, 'team' | 'kind' | 'lane' | 'hp' | 'maxHp'>>, team: Team): TowerHealth {
+  const h: TowerHealth = { king: 0, left: 0, right: 0 };
+  for (const e of entities) {
+    if (e.team !== team || e.kind === 'unit' || e.hp <= 0) continue;
+    const f = Math.max(0, Math.min(1, e.hp / e.maxHp));
+    if (e.kind === 'king') h.king = f;
+    else if (e.lane) h[e.lane] = f;
+  }
+  return h;
 }
 
 /**
@@ -282,7 +303,12 @@ export function createMatch(
       addEntity(state, { team, kind: 'princess', defId: starters[team][i]!, ...p, deployTimer: 0, active: true, lane });
     });
   }
-  for (const t of state.entities) t.hp = t.maxHp = Math.round(t.maxHp * rules.towerHpScale * modsOf(state, t.team).towerHp);
+  for (const t of state.entities) {
+    t.hp = t.maxHp = Math.round(t.maxHp * rules.towerHpScale * modsOf(state, t.team).towerHp);
+    const start = rules.startHp?.[t.team];
+    const f = start ? (t.kind === 'king' ? start.king : start[t.lane!]) : 1;
+    t.hp = Math.max(1, Math.round(t.maxHp * Math.max(0, Math.min(1, f))));
+  }
   return state;
 }
 
