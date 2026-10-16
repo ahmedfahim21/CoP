@@ -15,6 +15,7 @@ interface LocalState {
   mode: string;
   title: string;
   twist: string;
+  regularSeconds: number;
   entities: Map<string, EntityLike>;
   projectiles: Map<string, ProjectileLike>;
   players: Map<string, PlayerLike>;
@@ -63,6 +64,7 @@ export class LocalBattle implements BattleSession {
     }
     this.state = {
       phase: match.phase, timeLeft: match.timeLeft, doubleElixir: false, mode: 'puzzle', title: opts.title ?? '', twist: opts.twist ?? '',
+      regularSeconds: Math.round(opts.clock ? opts.clock(match, 0) : match.rules.regularSeconds),
       entities: new Map<string, EntityLike>(), projectiles: new Map<string, ProjectileLike>(), players: this.players,
     };
     this.mirror();
@@ -157,7 +159,7 @@ export class LocalBattle implements BattleSession {
     const m = this.match;
     const s = this.state;
     s.phase = m.phase;
-    s.timeLeft = this.opts.clock ? this.opts.clock(m, this.elapsed) : m.timeLeft;
+    s.timeLeft = this.opts.clock && m.phase !== 'countdown' ? this.opts.clock(m, this.elapsed) : m.timeLeft;
     s.doubleElixir = isDoubleElixir(m);
     for (const p of this.players.values()) {
       p.elixir = m.players[p.team]!.elixir;

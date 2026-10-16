@@ -48,6 +48,7 @@ export interface BattleSession extends BattleSource {
     mode: string;
     title: string;
     twist: string;
+    regularSeconds: number;
     players: MapLike<PlayerLike> & { get(key: string): PlayerLike | undefined };
   };
   on(event: 'hand', fn: (m: HandMessage) => void): () => void;

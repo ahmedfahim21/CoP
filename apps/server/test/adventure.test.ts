@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import type { Room as ClientRoom } from '@colyseus/sdk';
 import {
-  DEFAULT_DECK, EVENTS, MSG, QUEUE_ROOM_NAME, ROOM_NAME, dailyChallenge, dayKey, draftOffers, draftSeed, isReplay, runReplay,
+  DEFAULT_DECK, EVENTS, GAUNTLET_RULES, MSG, QUEUE_ROOM_NAME, ROOM_NAME, dailyChallenge, dayKey, draftOffers, draftSeed, isReplay, runReplay,
   type CreatedProfileResponse, type MatchState, type RematchMessage, type ReplayResponse, type ScoreboardResponse, type SeatMessage,
   type StarterPick, type StatusResponse, type SummaryMessage, type Team,
 } from '@cop/shared';
@@ -159,6 +159,8 @@ describe('Gauntlet', () => {
     const me = await newProfile('Runner');
     const r1 = await adventure(me.credential, { kind: 'gauntlet' });
     expect(r1.room.state.title).toBe('Gauntlet · Round 1');
+    // The timer shows the Gauntlet's own clock before the start, not the ladder's.
+    expect(r1.room.state.regularSeconds).toBe(GAUNTLET_RULES.regularSeconds);
     // Take damage before winning, so round 2 starts hurt.
     const myLeft = matchOf(r1.room).entities.find((e) => e.team === 0 && e.kind === 'princess')!;
     myLeft.hp = Math.round(myLeft.maxHp / 2);

@@ -295,9 +295,9 @@ export class BattleHud {
   private tick() {
     const s = this.session.state;
     // Timer.
-    // Before the start, show the full clock for this mode (training is shorter).
+    // Before the start, show the full clock for this battle (training, the League and others are shorter).
     const t = s.phase === 'countdown' || s.phase === 'waiting'
-      ? rulesFor(s.mode as MatchMode).regularSeconds
+      ? s.regularSeconds || rulesFor(s.mode as MatchMode).regularSeconds
       : Math.max(0, Math.ceil(s.timeLeft));
     this.timerValue.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
     this.timerLabel.textContent = s.phase === 'overtime' ? 'Overtime' : 'Time left';
@@ -305,7 +305,7 @@ export class BattleHud {
 
     // Countdown and announcements.
     if (s.phase === 'countdown') {
-      const n = Math.max(1, t);
+      const n = Math.max(1, Math.ceil(s.timeLeft));
       if (n !== this.lastCount) {
         this.lastCount = n;
         this.announce(String(n), 'big');

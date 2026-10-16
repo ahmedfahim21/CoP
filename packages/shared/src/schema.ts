@@ -89,5 +89,7 @@ export const BattleState = schema({
   title: t.string(),
   /** Its special rules in a sentence, e.g. a gym's twist; empty otherwise. */
   twist: t.string(),
+  /** Seconds of regular time, so the timer reads right before the start (0 if unknown). */
+  regularSeconds: t.uint16(),
 }, 'BattleState');
 export type BattleState = SchemaType<typeof BattleState>;
