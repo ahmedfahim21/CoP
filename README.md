@@ -17,6 +17,16 @@ Clash Royale–style Pokémon battles, live in your browser. Your king tower is 
 ## Features
 
 - **Real-time multiplayer**: a ranked ladder with trophies across ten Kanto arenas, friendly rooms by invite code, and a training bot.
+- **Ghost battles**: when nobody else is searching, the queue matches you against a real trainer's deck, played by a bot that fights at their trophy level. Ghosts move trophies at half rate.
+- **Adventure**: the single-player hub.
+  - **Kanto League**: 8 gyms, the Elite Four and Champion Blue, each with its own deck and twist. Earn up to 3 stars per stage.
+  - **Daily Challenge**: the same seed, deck and rules for everyone, with a daily scoreboard.
+  - **Weekly events**: a rotating mode (Triple Elixir, Mirror Match, Chaos, Sudden Death, Giants, Draft).
+  - **Gauntlet**: back-to-back rounds against tougher bots, with tower damage carried between rounds and a season leaderboard.
+  - **Puzzles**: six handcrafted setups that run fully in the browser.
+- **Progression**: trainer XP and levels, daily quests, win streaks, and card unlocks by level or League badge. Profiles from before this update keep every card.
+- **Replays**: every battle is recorded (a seed plus the plays) and can be rewatched from match history or shared by link.
+- **Monthly seasons**: on the 1st, trophies above 1,000 are halved and the final standings go on each profile.
 - **27 Pokémon cards** with Clash Royale–style specialities (evolution, digging, invisibility, healing, chain lightning…) and the real type chart.
 - **Starter towers**: pick two of Bulbasaur, Charmander and Squirtle to guard your side.
 - **3D arena** with Blender-built, animated models, cel shading and ink outlines.
@@ -61,6 +71,8 @@ Prerequisites: Node.js 22+, pnpm 10 and a Supabase project.
 
    Open http://localhost:5173. To battle yourself, use two browser profiles.
 
+   No Supabase project? `pnpm --filter @cop/server local` runs the server on an in-memory Postgres (PGlite) with the real migrations; start the client with `pnpm --filter @cop/client dev` alongside. Nothing is kept when it stops.
+
 | Variable | Used by | |
 |---|---|---|
 | `SUPABASE_URL` | server | Supabase project URL |
@@ -72,6 +84,7 @@ Prerequisites: Node.js 22+, pnpm 10 and a Supabase project.
 | Command | |
 |---|---|
 | `pnpm dev` | Client and server with hot reload |
+| `pnpm --filter @cop/server local` | Server only, on an in-memory database |
 | `pnpm test` | All tests: rules, server rooms, client |
 | `pnpm typecheck` | Type-check every package |
 | `pnpm build` | Production build |
@@ -88,6 +101,23 @@ While `pnpm dev` runs, `/sandbox.html` stages scripted fights for tuning animati
 - A fallen side tower earns a crown and opens that lane for deploys; a fallen trainer wins outright.
 - Matches last 3:00; a tie goes to 1:00 of sudden-death overtime.
 - Type matchups matter: super effective ×1.5, not very effective ×0.75.
+- League stages, Daily Challenges, events and the Gauntlet use shorter clocks and settle a tie by remaining tower health.
+
+## Progression
+
+| | |
+|---|---|
+| XP | Every battle pays XP: more for a win, plus a crown bonus, the first win of the day, a streak bonus and quests. Level *n* needs 80 + 40·*n* XP, up to level 30. |
+| Cards | New trainers start with 10 cards. The rest unlock one per trainer level from 3 to 19, and League first clears open some early. |
+| Quests | Three a day (UTC), drawn from your profile ID and the date, so they're the same on every device. |
+| Stars | 1 for beating a stage, 1 more for losing no tower, 1 more for three crowns. |
+| Seasons | Monthly. Trophies above 1,000 are halved and top finishes are kept on the profile. |
+
+Battles played against a server are scored on the server. Puzzles run on the client and only claim their one-time XP.
+
+## Analytics
+
+Besides page views, the client sends these custom [Vercel Analytics](https://vercel.com/docs/analytics) events from `apps/client/src/analytics.ts`: `battle_start`, `battle_end`, `queue_result`, `first_battle`, `league_clear`, `level_up`, `quest_complete`, `puzzle_solved` and `replay_watched`.
 
 ## Cards
 
@@ -125,8 +155,9 @@ While `pnpm dev` runs, `/sandbox.html` stages scripted fights for tuning animati
 
 ```
 apps/client       Game client: menus, HUD, 3D battle, sound
-apps/server       Colyseus rooms (battles, ranked queue) and the HTTP API
-packages/shared   Game rules: simulation, cards, type chart, bot, protocol
+apps/server       Colyseus rooms (battles, ranked queue, ghosts, Adventure modes) and the HTTP API
+packages/shared   Game rules: simulation, cards, type chart, bot, replays, League, modes,
+                  puzzles, progression, protocol
 supabase          Database migrations
 tools/blender     Scripted Blender models and animations
 tools/brand       Icon, social card and screenshot rendering
