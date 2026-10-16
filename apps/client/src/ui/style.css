@@ -664,3 +664,218 @@ h1, h2 { margin: 0; }
 @media (min-aspect-ratio: 3/4) and (max-aspect-ratio: 1/1) {
   body::before, body::after { display: none; }
 }
+
+/* --- Progression: levels, XP, stars, quests -------------------------------- */
+
+.level-badge {
+  display: inline-flex; align-items: baseline; justify-content: center; gap: 1px; flex: none;
+  min-width: 30px; height: 24px; padding: 2px 5px 0; font-size: 14px; line-height: 1;
+  background: var(--mint); border: 2px solid var(--ink); box-shadow: var(--shadow-xs);
+}
+.level-badge small { font-family: var(--sans); font-size: 9px; text-transform: uppercase; }
+.level-badge.tiny { min-width: 24px; height: 18px; font-size: 11px; padding: 1px 3px 0; margin-right: 6px; vertical-align: 1px; box-shadow: none; }
+.level-badge.tiny small { font-size: 7px; }
+.level-badge.big { min-width: 52px; height: 44px; font-size: 24px; padding-top: 6px; box-shadow: var(--shadow); }
+.level-badge.big small { font-size: 11px; }
+.avatar-wrap { position: relative; flex: none; }
+.avatar-wrap .level-badge { position: absolute; right: -8px; bottom: -6px; min-width: 24px; height: 18px; font-size: 11px; padding: 1px 3px 0; }
+.avatar-wrap .level-badge small { display: none; }
+
+.xp { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.xp-track { height: 16px; border: 2px solid var(--ink); background: var(--card); overflow: hidden; }
+.xp-fill { height: 100%; background: var(--mint); border-right: 2px solid var(--ink); transition: width 600ms ease-out; }
+.xp-text { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.adv-head { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 8px 10px; }
+.streak-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; background: var(--accent); border: 2px solid var(--ink); padding: 1px 8px 2px 5px; }
+.streak-chip svg { width: 16px; height: 16px; stroke: var(--ink); fill: #ff8a3a; }
+.panel-aside { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.panel-aside svg { width: 15px; height: 15px; }
+
+.stars { display: inline-flex; gap: 1px; }
+.star { width: 16px; height: 16px; stroke: var(--ink); stroke-width: 2; fill: var(--muted-bg); }
+.star.won { fill: var(--primary); }
+.star-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.star-list li { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.star-list li.done { color: var(--ink); }
+.star-list svg { width: 16px; height: 16px; flex: none; stroke: var(--ink); stroke-width: 2; fill: var(--muted-bg); }
+.star-list li.done svg { fill: none; stroke: var(--win); stroke-width: 3; }
+
+.quest-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.quest { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; background: var(--bg); border: 2px solid var(--ink); padding: 6px 8px; }
+.quest.done { background: #d6f9e3; }
+.quest-head { display: contents; }
+.quest-text { font-size: 14px; }
+.quest-xp { font-size: 13px; background: var(--mint); border: 2px solid var(--ink); padding: 0 6px 1px; align-self: start; }
+.quest.done .quest-xp { background: #4ade80; }
+.quest-track { height: 10px; border: 2px solid var(--ink); background: var(--card); overflow: hidden; align-self: center; }
+.quest-fill { height: 100%; background: var(--primary); transition: width 600ms ease-out; }
+.quest.done .quest-fill { background: #4ade80; }
+.quest-count { font-size: 12px; color: var(--muted); text-align: right; }
+
+/* --- Adventure tab --------------------------------------------------------- */
+
+#app[data-tab='adventure'] { background: var(--dots), #fff1c9; }
+.adventure .panel { display: flex; flex-direction: column; gap: 8px; }
+.adventure .panel .panel-title { margin-bottom: 0; }
+.adventure .panel .row > .btn { flex: 1; }
+.adventure .panel .row > .btn.small { flex: none; }
+.daily-title { font-size: 19px; }
+
+.league-next { display: flex; flex-direction: column; gap: 6px; background: var(--accent); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 8px 10px; }
+.league-next.full { box-shadow: none; }
+.league-who { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; }
+.league-who .stars { grid-row: 1 / 3; grid-column: 2; }
+.league-who .star { width: 20px; height: 20px; }
+.league-leader { font-size: 20px; line-height: 1.1; }
+.league-twist { display: flex; align-items: flex-start; gap: 6px; font-size: 14px; line-height: 1.35; }
+.league-twist svg { width: 16px; height: 16px; flex: none; margin-top: 2px; stroke: var(--ink); fill: var(--pink); }
+.league-hint { font-size: 13px; color: var(--muted); line-height: 1.35; border-left: 3px solid var(--ink); padding-left: 8px; }
+.league-reward { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.league-reward svg { width: 16px; height: 16px; flex: none; stroke: var(--ink); fill: var(--purple); }
+
+.league-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.stage-dot {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 2px 4px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm);
+  cursor: pointer; transition: transform 120ms, box-shadow 120ms;
+}
+.stage-dot:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow); }
+.stage-dot .star { width: 12px; height: 12px; }
+.stage-dot > svg { width: 14px; height: 14px; stroke: var(--muted); }
+.stage-num { width: 28px; height: 28px; display: grid; place-items: center; font-size: 13px; border: 2px solid var(--ink); border-radius: 50%; background: var(--muted-bg); }
+.stage-name { font-size: 11px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage-dot.cleared .stage-num { background: var(--primary); }
+.stage-dot.locked { background: var(--bg); cursor: pointer; }
+.stage-dot.locked .stage-num, .stage-dot.locked .stage-name { opacity: 0.5; }
+.stage-dot.next { background: var(--accent); outline: 3px solid var(--pink); outline-offset: 1px; animation: stage-pulse 1.4s ease-in-out infinite alternate; }
+@keyframes stage-pulse { to { outline-color: transparent; } }
+.stage-dot[data-type='fire'] .stage-num { border-color: #c2410c; } .stage-dot[data-type='water'] .stage-num { border-color: #1d4ed8; }
+.stage-modal { display: flex; flex-direction: column; gap: 10px; }
+.mini-deck { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.mini-deck .card { cursor: default; padding: 2px; box-shadow: var(--shadow-xs); }
+.mini-deck .card:hover { transform: none; box-shadow: var(--shadow-xs); }
+.mini-deck .card .card-art { inset: 2px; border-width: 1px; }
+.mini-deck .card .card-name, .mini-deck .card .card-cost, .mini-deck .card .drop { display: none; }
+.modal .mini-deck { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+.event-wins { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+.event-wins span:last-child { margin-left: 6px; color: var(--muted); }
+.pip { width: 14px; height: 14px; border: 2px solid var(--ink); background: var(--card); transform: rotate(45deg); }
+.pip.won { background: var(--pink); }
+
+.draft { display: flex; flex-direction: column; gap: 10px; }
+.draft-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.draft-pick { display: flex; flex-direction: column; gap: 6px; align-items: stretch; padding: 8px; background: var(--bg); border: 2px solid var(--ink); box-shadow: var(--shadow); cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
+.draft-pick:hover { background: var(--accent); transform: translate(-1px, -1px); box-shadow: var(--shadow-md); }
+.draft-pick:active { transform: translate(2px, 2px); box-shadow: none; }
+.draft-role { font-size: 12px; color: var(--muted); text-align: center; }
+
+.puzzle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.puzzle-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 8px 8px; text-align: left; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
+.puzzle-tile:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow); background: var(--accent); }
+.puzzle-tile.solved { background: #d6f9e3; }
+.puzzle-tile > svg { position: absolute; top: 5px; right: 5px; width: 16px; height: 16px; stroke: var(--win); stroke-width: 3; }
+.puzzle-num { width: 24px; height: 24px; display: grid; place-items: center; font-size: 13px; background: var(--purple); border: 2px solid var(--ink); }
+.puzzle-name { font-size: 13px; line-height: 1.2; }
+
+/* --- Battle tab and menus ---------------------------------------------------- */
+
+.online-count { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.online-count:empty { display: none; }
+.online-dot { width: 10px; height: 10px; flex: none; border: 2px solid var(--ink); border-radius: 50%; background: #4ade80; animation: online-blink 1.6s ease-in-out infinite; }
+@keyframes online-blink { 50% { background: var(--win); } }
+
+.segmented { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; border: 2px solid var(--ink); box-shadow: var(--shadow); background: var(--card); flex: none; }
+.seg-btn { display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-right: 2px solid var(--ink); background: var(--card); padding: 7px 8px 8px; font-family: var(--head); font-size: 14px; cursor: pointer; }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn:hover { background: var(--accent); }
+.seg-btn[aria-selected='true'] { background: var(--primary); }
+.seg-btn svg { width: 16px; height: 16px; flex: none; }
+.sub-panel { display: flex; flex-direction: column; gap: 16px; }
+.sub-panel[hidden] { display: none; }
+
+/* Locked cards: dimmed, with a lock and the level that opens them. */
+.card.locked .card-art img { filter: grayscale(1) brightness(0.55); }
+.lock-cover { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: rgba(0, 0, 0, 0.28); }
+.lock-cover svg { width: 26px; height: 26px; stroke: var(--ink); stroke-width: 2.4; fill: var(--muted-bg); }
+.lock-cover span { font-family: var(--head); font-size: 12px; background: var(--card); border: 2px solid var(--ink); padding: 0 5px 1px; }
+.lock-cover span:empty { display: none; }
+.locked-note { display: flex; align-items: center; gap: 8px; background: var(--muted-bg); border: 2px solid var(--ink); padding: 6px 10px; font-size: 14px; }
+.locked-note svg { width: 18px; height: 18px; flex: none; stroke: var(--ink); }
+
+/* --- Ranks and profile ------------------------------------------------------- */
+
+.score { font-size: 16px; white-space: nowrap; }
+.match-row.has-replay { grid-template-columns: 50px 1fr auto auto 34px; }
+.replay-btn { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; background: var(--purple); border: 2px solid var(--ink); box-shadow: var(--shadow-xs); cursor: pointer; }
+.replay-btn:hover { background: var(--accent); }
+.replay-btn:active { transform: translate(1px, 1px); box-shadow: none; }
+.replay-btn svg { width: 16px; height: 16px; stroke: var(--ink); stroke-width: 2.4; }
+.adventure-summary { display: flex; flex-direction: column; gap: 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 10px; }
+.adventure-summary .row { align-items: center; }
+.adventure-summary .plate-sub { display: flex; align-items: center; gap: 4px; }
+.adventure-summary .plate-sub svg { width: 14px; height: 14px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.badge-dot { width: 22px; height: 22px; display: grid; place-items: center; font-family: var(--head); font-size: 10px; border: 2px solid var(--ink); border-radius: 50%; background: var(--bg); color: var(--muted); }
+.badge-dot.won { background: var(--primary); color: var(--ink); }
+.seasons { display: flex; flex-direction: column; gap: 8px; }
+.season-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.season-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); padding: 4px 10px; font-size: 14px; }
+
+/* --- Battle: intro card, result rewards, replays, puzzles ---------------------- */
+
+.battle-intro {
+  position: absolute; left: 50%; top: 28%; transform: translateX(-50%); z-index: 6;
+  width: min(320px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 4px; text-align: center;
+  background: var(--card); border: 3px solid var(--ink); box-shadow: var(--shadow-lg); padding: 10px 14px 12px;
+  pointer-events: auto; cursor: pointer; animation: pop-in 260ms cubic-bezier(.2,1.4,.4,1);
+  transition: opacity 400ms, transform 400ms;
+}
+.battle-intro.gone { opacity: 0; transform: translate(-50%, -16px); pointer-events: none; }
+.battle-intro-title { font-size: 20px; line-height: 1.15; }
+.battle-intro-twist { font-size: 14px; line-height: 1.35; color: var(--muted); }
+
+.result-rewards { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(320px, 100%); animation: fade-in 400ms 800ms both; }
+.result-rewards:empty { display: none; }
+.reward-line { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; text-align: center; }
+.reward-line > svg { width: 18px; height: 18px; flex: none; stroke: var(--ink); fill: var(--primary); }
+.reward-line.stage .star { width: 28px; height: 28px; }
+.reward-line.stage .star.won { animation: crown-pop 600ms cubic-bezier(.2,1.6,.4,1) both; }
+.reward-line.stage .star:nth-child(2) { animation-delay: 150ms; } .reward-line.stage .star:nth-child(3) { animation-delay: 300ms; }
+.quest-done > svg { fill: none; stroke: var(--win); stroke-width: 3; }
+.level-up { display: flex; align-items: center; gap: 10px; font-size: 22px; background: var(--mint); border: 3px solid var(--ink); box-shadow: var(--shadow-md); padding: 6px 14px 6px 8px; animation: pop-in 400ms cubic-bezier(.2,1.4,.4,1) 900ms both; }
+.xp-gain { width: 100%; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); padding: 6px 10px; }
+.xp-gain-total { font-size: 18px; text-align: center; }
+.xp-lines { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.xp-lines li { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
+.xp-lines li .stroke { color: var(--ink); }
+.new-cards { display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--purple); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 6px 10px 8px; }
+.new-cards .stroke { display: flex; align-items: center; gap: 4px; font-size: 16px; }
+.new-cards .stroke svg { width: 18px; height: 18px; }
+.new-cards .mini-deck { grid-template-columns: repeat(4, 52px); justify-content: center; }
+.result-replay:empty { display: none; }
+
+.replay-bar {
+  position: absolute; left: 8px; right: 8px; bottom: calc(var(--tray-h) + 8px); z-index: 8;
+  display: flex; align-items: center; gap: 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 6px;
+}
+.replay-bar .btn { padding: 4px 10px 5px; font-size: 14px; box-shadow: var(--shadow-sm); }
+.replay-bar .icon-btn { width: 34px; height: 34px; }
+.replay-bar svg { width: 16px; height: 16px; }
+.replay-bar .done { background: #4ade80; }
+.replay-tag { margin-right: auto; font-size: 14px; background: var(--destructive); color: #fff; border: 2px solid var(--ink); padding: 1px 8px 2px; }
+.replay-tag::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: rec-blink 1.2s steps(1) infinite; }
+@keyframes rec-blink { 50% { opacity: 0; } }
+.replaying .tray { pointer-events: none; }
+.replaying .tray .card { cursor: default; }
+
+.puzzle-intro .mm-box { gap: 12px; }
+.puzzle-text { font-size: 15px; line-height: 1.45; }
+.puzzle-goal { font-size: 15px; line-height: 1.35; background: var(--accent); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 8px 12px; }
+.puzzle-result .mm-swords, .replay-end .mm-swords { width: 80px; height: 80px; animation: none; }
+
+@media (max-width: 380px) {
+  .mini-deck { grid-template-columns: repeat(4, 1fr); }
+  .puzzle-grid { grid-template-columns: repeat(2, 1fr); }
+  .replay-bar .btn { padding: 4px 7px 5px; }
+}

@@ -1,6 +1,8 @@
-import { Bot, Copy, Crown, Dumbbell, Swords, Trophy, Users } from './icons.js';
-import type { BattleStats, MatchMode, QueueStatusMessage, RematchStateMessage, SummaryMessage, Team } from '@cop/shared';
+import { Bot, Copy, Crown, Dumbbell, Ghost, Gift, Replay, Star, Swords, Tick, Trophy, Users } from './icons.js';
+import { STAGES, stageById, type BattleStats, type MatchMode, type QueueStatusMessage, type RematchStateMessage, type SummaryMessage, type Team } from '@cop/shared';
+import { cardEl } from './cards.js';
 import { h, icon } from './dom.js';
+import { levelBadge, starsEl } from './progress.js';
 import { avatar } from './home.js';
 import { deltaPill } from './ladder.js';
 import { sound } from '../audio/sound.js';
@@ -52,7 +54,7 @@ export function matchmakingOverlay(opts: { code: string | null; joining?: boolea
         h('div', { class: 'mm-stat' }, h('span', { class: 'k', textContent: 'Searching' }), h('span', { class: 'v stroke', textContent: `${Math.floor(s.waited / 60)}:${String(s.waited % 60).padStart(2, '0')}` })),
         h('div', { class: 'mm-stat' }, icon(Trophy), h('span', { class: 'v', textContent: range })),
         h('div', { class: 'mm-stat' }, icon(Users), h('span', { class: 'v', textContent: `${s.searching} in queue` })),
-        h('div', { class: 'mm-stat muted' }, icon(Bot), h('span', { class: 'v', textContent: s.botIn > 0 ? `Bot steps in after ${s.botIn}s` : 'Calling in a bot…' })),
+        h('div', { class: 'mm-stat muted' }, icon(Ghost), h('span', { class: 'v', textContent: s.botIn > 0 ? `A ghost steps in after ${s.botIn}s` : 'Finding a ghost…' })),
       );
     },
   };
@@ -70,10 +72,15 @@ export interface ResultInfo {
   reason: string;
   /** Each side's weakest standing tower, 0..1: shown when the tiebreak decided it. */
   towerHealth: { mine: number; foe: number } | null;
-  /** Ranked: queue again. Otherwise: ask for a rematch in a fresh room. */
+  /** Ranked and ghost: queue again. Otherwise: ask for a rematch in a fresh room. */
   onAgain(): void;
   onMenu(): void;
+  /** Watch this battle again; offered once the summary says it was stored. */
+  onReplay?(matchId: number): void;
 }
+
+/** Modes whose "again" goes back to the ranked queue. */
+export const QUEUE_MODES: readonly MatchMode[] = ['ranked', 'ghost'];
 
 const REASONS: Record<string, string> = {
   king: 'The trainer was defeated!',
@@ -85,7 +92,7 @@ const REASONS: Record<string, string> = {
 
 const MODE_NOTE: Record<MatchMode, string> = {
   ranked: '',
-  ghost: 'Ghost battle: only your trophies move, at half rate.',
+  ghost: 'Ghost battle: the bot played a real trainer’s deck. Only your trophies move, at half rate.',
   league: '',
   daily: '',
   gauntlet: '',
@@ -99,7 +106,9 @@ const MODE_NOTE: Record<MatchMode, string> = {
 export class ResultScreen {
   readonly el: HTMLDivElement;
   private readonly myDelta = h('div', { class: 'result-delta' });
+  private readonly rewardsEl = h('div', { class: 'result-rewards' });
   private readonly statsEl = h('div', { class: 'result-stats' });
+  private readonly replayRow = h('div', { class: 'result-replay' });
   private readonly rematchNote = h('div', { class: 'reason' });
   private readonly again: HTMLButtonElement;
   private asked = false;
@@ -116,14 +125,15 @@ export class ResultScreen {
         who === 'me' ? this.myDelta : null,
       );
     };
-    const ranked = r.mode === 'ranked';
-    this.again = h('button', { class: 'btn gold' }, ranked ? 'Battle again' : 'Rematch');
+    const ranked = QUEUE_MODES.includes(r.mode);
+    this.again = h('button', { class: 'btn gold' }, againLabel(r));
     const menu = h('button', { class: 'btn' }, 'OK');
     this.again.addEventListener('click', () => {
       if (!ranked) {
         this.asked = true;
         this.again.disabled = true;
         this.rematchNote.textContent = r.foeIsBot ? 'Setting up…' : 'Waiting for your rival…';
+        this.again.classList.remove('pulse');
       }
       r.onAgain();
     });
@@ -138,16 +148,25 @@ export class ResultScreen {
           h('div', { class: 'tiebreak-row' }, h('span', { textContent: "Rival's weakest tower" }), h('span', { class: 'tiebreak-val stroke', textContent: pct(r.towerHealth.foe) })))
         : null,
       h('div', { class: 'reason', textContent: [REASONS[r.reason] ?? '', MODE_NOTE[r.mode]].filter(Boolean).join(' ') }),
+      this.rewardsEl,
       this.statsEl,
       h('div', { class: 'actions' }, menu, this.again),
       this.rematchNote,
+      this.replayRow,
     );
   }
 
   setSummary(s: SummaryMessage) {
     const mine = s.teams[this.r.myTeam];
     const foe = s.teams[(1 - this.r.myTeam) as Team];
-    this.myDelta.replaceChildren(...(s.mode === 'ranked' ? [deltaPill(mine.delta), h('div', { class: 'trophy-total stroke' }, icon(Trophy), String(mine.trophies))] : []));
+    this.myDelta.replaceChildren(...(QUEUE_MODES.includes(s.mode) ? [deltaPill(mine.delta), h('div', { class: 'trophy-total stroke' }, icon(Trophy), String(mine.trophies))] : []));
+    this.showRewards(s);
+    if (s.adventure?.gauntlet) this.again.textContent = s.adventure.gauntlet.cleared ? `Round ${s.adventure.gauntlet.round + 1}` : 'New run';
+    if (s.matchId !== undefined && this.r.onReplay) {
+      const watch = h('button', { class: 'btn small' }, icon(Replay, 'btn-icon'), ' Watch replay');
+      watch.addEventListener('click', () => this.r.onReplay!(s.matchId!));
+      this.replayRow.replaceChildren(watch);
+    }
     const rows: Array<[string, (b: BattleStats) => number]> = [
       ['Cards played', (b) => b.cardsPlayed],
       ['Elixir spent', (b) => b.elixirSpent],
@@ -167,8 +186,50 @@ export class ResultScreen {
     );
   }
 
+  /** What the battle earned: stars, scores, XP, levels, new cards and quests. */
+  private showRewards(s: SummaryMessage) {
+    const mine = s.teams[this.r.myTeam].rewards;
+    const adv = s.adventure;
+    const parts: Array<HTMLElement | null> = [];
+    if (adv?.stage) {
+      const stage = stageById(adv.stage.id);
+      const gained = adv.stage.starsAfter - adv.stage.starsBefore;
+      parts.push(h('div', { class: 'reward-line stage' }, starsEl(adv.stage.starsAfter),
+        h('span', { textContent: gained > 0 ? (adv.stage.starsBefore === 0 ? `${stage?.badge ?? 'Badge'} earned!` : `+${gained} star${gained > 1 ? 's' : ''}`) : stage ? `${stage.leader}: ${adv.stage.starsAfter}/3 stars` : '' })));
+      const nextStage = stage ? STAGES[stage.order] : undefined;
+      if (adv.stage.starsBefore === 0 && adv.stage.starsAfter > 0 && nextStage) {
+        parts.push(h('div', { class: 'reward-line', textContent: `${nextStage.leader} awaits.` }));
+      }
+    }
+    if (adv?.daily) {
+      parts.push(h('div', { class: 'reward-line' }, icon(Star),
+        h('span', { textContent: `Score ${adv.daily.score.toLocaleString('en')}${adv.daily.score >= adv.daily.best ? ' · new best' : ` · best ${adv.daily.best.toLocaleString('en')}`}${adv.daily.rank ? ` · #${adv.daily.rank} today` : ''}` })));
+    }
+    if (adv?.gauntlet) {
+      const g = adv.gauntlet;
+      parts.push(h('div', { class: 'reward-line' }, icon(Swords),
+        h('span', { textContent: g.cleared ? `Round ${g.round} cleared!` : `Run over: ${g.round - 1} round${g.round - 1 === 1 ? '' : 's'} cleared${g.rank ? ` · #${g.rank} this season` : ''}` })));
+    }
+    if (mine) {
+      if (mine.levelAfter > mine.levelBefore) {
+        parts.push(h('div', { class: 'level-up' }, levelBadge(mine.levelAfter, 'big'), h('span', { class: 'stroke', textContent: 'Level up!' })));
+      }
+      if (mine.xp > 0) {
+        parts.push(h('div', { class: 'xp-gain' },
+          h('div', { class: 'xp-gain-total stroke', textContent: `+${mine.xp} XP` }),
+          h('ul', { class: 'xp-lines' }, ...mine.rewards.map((rw) => h('li', {}, h('span', { textContent: rw.text }), h('span', { class: 'stroke', textContent: `+${rw.xp}` }))))));
+      }
+      for (const q of mine.quests) parts.push(h('div', { class: 'reward-line quest-done' }, icon(Tick), h('span', { textContent: `Quest complete: ${q.text}` })));
+      if (mine.unlocked.length > 0) {
+        parts.push(h('div', { class: 'new-cards' }, h('div', { class: 'stroke' }, icon(Gift), mine.unlocked.length > 1 ? ' New cards!' : ' New card!'),
+          h('div', { class: 'mini-deck' }, ...mine.unlocked.map((c) => cardEl(c)))));
+      }
+    }
+    this.rewardsEl.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
+  }
+
   setRematch(state: RematchStateMessage) {
-    if (this.r.mode === 'ranked') return;
+    if (QUEUE_MODES.includes(this.r.mode)) return;
     const foeAsked = state.requested[(1 - this.r.myTeam) as Team];
     if (!state.open) {
       this.again.disabled = true;
@@ -179,6 +240,17 @@ export class ResultScreen {
       this.rematchNote.textContent = `${this.r.foeName} wants a rematch!`;
       this.again.classList.add('pulse');
     }
+  }
+}
+
+function againLabel(r: ResultInfo): string {
+  switch (r.mode) {
+    case 'ranked': case 'ghost': return 'Battle again';
+    case 'league': return r.winner === 'me' ? 'Play again' : 'Try again';
+    case 'daily': return 'Try again';
+    case 'gauntlet': return r.winner === 'me' ? 'Next round' : 'New run';
+    case 'event': return 'Play again';
+    default: return 'Rematch';
   }
 }
 

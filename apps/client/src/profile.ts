@@ -1,5 +1,8 @@
-import { parseCredential, sanitizeTrainerName, type MatchRecord, type OwnProfile, type OwnProfileResponse } from '@cop/shared';
-import { ApiError, api } from './api.js';
+import {
+  CARD_IDS, emptyProgress, levelFor, parseCredential, sanitizeTrainerName, unlockedCards,
+  type CardId, type LevelInfo, type MatchRecord, type OwnProfile, type OwnProfileResponse, type Progress,
+} from '@cop/shared';
+import { ApiError, api, type PuzzleClaimResponse } from './api.js';
 import { savePrefs, type Prefs } from './prefs.js';
 
 const KEY = 'cop:credential';
@@ -35,6 +38,31 @@ export class ProfileSession {
   /** Credential for joining rooms, once the profile is known to be valid. */
   get activeCredential(): string | null {
     return this.status === 'ready' ? this.credential : null;
+  }
+
+  /** Progress as last loaded; empty (nothing earned) before the profile loads. */
+  get progress(): Progress {
+    return this.profile?.progress ?? emptyProgress();
+  }
+
+  get level(): LevelInfo {
+    return levelFor(this.progress.xp);
+  }
+
+  /** Cards the player may put in a deck. Offline (no profile), everything: nothing to check against. */
+  get unlocked(): Set<CardId> {
+    return this.profile ? unlockedCards(this.profile.progress) : new Set(CARD_IDS);
+  }
+
+  /** Records a solved puzzle; the XP comes back once per puzzle. */
+  async claimPuzzle(id: string): Promise<PuzzleClaimResponse | null> {
+    if (!this.credential || this.status !== 'ready') return null;
+    const res = await api.claimPuzzle(this.credential, id);
+    if (res.profile) {
+      this.profile = res.profile;
+      this.emit();
+    }
+    return res;
   }
 
   onChange(fn: () => void): () => void {

@@ -1,7 +1,16 @@
 import type {
-  CreatedProfileResponse, LeaderboardResponse, OwnProfileResponse, ProfileResponse, ProfileUpdate,
+  CardId, CreatedProfileResponse, LeaderboardResponse, OwnProfile, OwnProfileResponse, ProfileResponse, ProfileUpdate,
+  ReplayResponse, ScoreboardResponse, StatusResponse,
 } from '@cop/shared';
 import { SERVER_URL } from './config.js';
+
+export interface PuzzleClaimResponse {
+  xp: number;
+  unlocked: CardId[];
+  levelBefore?: number;
+  levelAfter?: number;
+  profile: OwnProfile | null;
+}
 
 /** An HTTP error from the game server; `status` 0 means it couldn't be reached at all. */
 export class ApiError extends Error {
@@ -33,4 +42,9 @@ export const api = {
   updateMe: (credential: string, update: ProfileUpdate) => request<OwnProfileResponse>('/profiles/me', { method: 'PATCH', body: update, credential }),
   profile: (id: string) => request<ProfileResponse>(`/profiles/${encodeURIComponent(id)}`),
   leaderboard: (limit = 50, offset = 0) => request<LeaderboardResponse>(`/leaderboard?limit=${limit}&offset=${offset}`),
+  status: () => request<StatusResponse>('/status'),
+  scores: (board: ScoreboardResponse['board'], period?: string) =>
+    request<ScoreboardResponse>(`/scores/${board}${period ? `?period=${encodeURIComponent(period)}` : ''}`),
+  replay: (matchId: number) => request<ReplayResponse>(`/replays/${matchId}`),
+  claimPuzzle: (credential: string, id: string) => request<PuzzleClaimResponse>('/progress/puzzle', { method: 'POST', body: { id }, credential }),
 };
