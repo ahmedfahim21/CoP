@@ -1,8 +1,9 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { logger } from 'colyseus';
+import { logger, matchMaker } from 'colyseus';
 import {
-  isProfileTag,
+  QUEUE_ROOM_NAME, ROOM_NAME, applyPuzzle, dayKey, isProfileTag, puzzleById, seasonKey,
   type CreatedProfileResponse, type LeaderboardResponse, type OwnProfileResponse, type ProfileResponse, type ProfileUpdate,
+  type ScoreboardResponse, type StatusResponse,
 } from '@cop/shared';
 import type { ProfileStore } from './store.js';
 
@@ -80,6 +81,55 @@ export function apiRouter(store: ProfileStore): express.Router {
     const limit = clampInt(req.query.limit, 1, 100, 50);
     const offset = clampInt(req.query.offset, 0, 1_000_000, 0);
     res.json((await store.leaderboard(limit, offset)) satisfies LeaderboardResponse);
+  });
+
+  router.get('/status', async (_req, res) => {
+    const [battles, queues] = await Promise.all([matchMaker.query({ name: ROOM_NAME }), matchMaker.query({ name: QUEUE_ROOM_NAME })]);
+    const inBattle = battles.reduce((sum, r) => sum + r.clients, 0);
+    const searching = queues.reduce((sum, r) => sum + r.clients, 0);
+    res.json({ online: inBattle + searching, inBattle, searching } satisfies StatusResponse);
+  });
+
+  router.get('/scores/:board', async (req, res) => {
+    const board = String(req.params.board);
+    if (board !== 'daily' && board !== 'gauntlet') {
+      res.status(404).json({ error: 'No such board' });
+      return;
+    }
+    const now = Date.now();
+    const raw = typeof req.query.period === 'string' ? req.query.period : '';
+    const valid = board === 'daily' ? /^\d{4}-\d{2}-\d{2}$/.test(raw) : /^\d{4}-\d{2}$/.test(raw);
+    const period = valid ? raw : board === 'daily' ? dayKey(now) : seasonKey(now);
+    res.json((await store.scoreboard(board, period, clampInt(req.query.limit, 1, 100, 50))) satisfies ScoreboardResponse);
+  });
+
+  router.get('/replays/:id', async (req, res) => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const replay = Number.isSafeInteger(id) && id > 0 ? await store.replay(id) : null;
+    if (!replay) {
+      res.status(404).json({ error: 'No replay for that battle' });
+      return;
+    }
+    // Replays never change once stored.
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.json(replay);
+  });
+
+  /** Puzzles run in the browser; solving one is claimed here, once per puzzle. */
+  router.post('/progress/puzzle', async (req, res) => {
+    const me = await authenticate(store, req, res);
+    if (!me) return;
+    const puzzle = puzzleById((req.body as { id?: unknown } | undefined)?.id);
+    if (!puzzle) {
+      res.status(400).json({ error: 'No such puzzle' });
+      return;
+    }
+    const r = await store.updateProgress(me.id, (p) => {
+      const out = applyPuzzle(p, puzzle.id);
+      return { progress: out.progress, result: out };
+    });
+    const profile = await store.own(me.id);
+    res.json({ xp: r?.xp ?? 0, unlocked: r?.unlocked ?? [], levelBefore: r?.levelBefore, levelAfter: r?.levelAfter, profile });
   });
 
   router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

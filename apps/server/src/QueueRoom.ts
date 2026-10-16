@@ -1,11 +1,11 @@
 import { Room, ServerError, logger, matchMaker, type Client } from 'colyseus';
 import {
-  DEFAULT_DECK, MSG, ROOM_NAME, isDeck, isStarterPick, searchWindow,
+  DEFAULT_DECK, MSG, ROOM_NAME, deckUnlocked, isDeck, isStarterPick, searchWindow,
   type CardId, type QueueJoinOptions, type QueueStatusMessage, type SeatMessage, type StarterPick,
 } from '@cop/shared';
 import type { InternalOptions } from './BattleRoom.js';
 import { pairUp, type QueueEntry } from './matchmaking.js';
-import type { ProfileStore } from './store.js';
+import type { Ghost, ProfileStore } from './store.js';
 import { INTERNAL_KEY } from './trust.js';
 
 interface Waiting extends QueueEntry {
@@ -13,15 +13,20 @@ interface Waiting extends QueueEntry {
   name: string;
   starters: StarterPick;
   deck: CardId[];
+  /** A ghost lookup is in flight (or found none); don't start another. */
+  ghostTried: boolean;
 }
 
 /**
  * The ranked queue. Everyone searching sits in this one room; once a second it pairs
  * players by trophies (see matchmaking.ts), creates a ranked battle and hands each player
- * a reserved seat. Nobody waits forever: after `botAfterSeconds` you get the training bot.
+ * a reserved seat. Nobody waits long: after `ghostAfterSeconds` you fight a ghost (the bot
+ * playing a real trainer's deck, for half the trophies), and if there's no ghost to be had,
+ * the training bot after `botAfterSeconds`.
  */
 export class QueueRoom extends Room {
   static cycleMs = 1000;
+  static ghostAfterSeconds = 8;
   static botAfterSeconds = 30;
 
   protected store: ProfileStore | null = null;
@@ -40,9 +45,11 @@ export class QueueRoom extends Room {
     if (options.deck !== undefined && !isDeck(options.deck)) throw new ServerError(400, 'A deck is eight different cards');
     const profile = await this.store?.authenticate(options.credential);
     if (!profile) throw new ServerError(401, 'Ranked battles need a trainer profile');
+    const deck = options.deck ?? [...DEFAULT_DECK];
+    if (!deckUnlocked(profile.progress, deck)) throw new ServerError(403, 'Some cards in that deck are still locked');
     this.waiting.set(client.sessionId, {
       client, profileId: profile.id, name: profile.name, trophies: profile.trophies, joinedAt: Date.now(),
-      starters: options.starters, deck: options.deck ?? [...DEFAULT_DECK],
+      starters: options.starters, deck, ghostTried: false,
     });
     logger.info(`[queue] ${profile.id} (${profile.trophies} trophies) searching; ${this.waiting.size} in queue`);
     this.cycle();
@@ -65,10 +72,15 @@ export class QueueRoom extends Room {
       void this.launch([a, b], 'ranked');
     }
     for (const w of [...this.waiting.values()]) {
-      if (now - w.joinedAt < QueueRoom.botAfterSeconds * 1000) continue;
-      this.waiting.delete(w.client.sessionId);
-      logger.info(`[queue] no opponent for ${w.profileId}; sending in the bot`);
-      void this.launch([w], 'training');
+      const waited = now - w.joinedAt;
+      if (waited >= QueueRoom.botAfterSeconds * 1000) {
+        this.waiting.delete(w.client.sessionId);
+        logger.info(`[queue] no opponent or ghost for ${w.profileId}; sending in the bot`);
+        void this.launch([w], 'training');
+      } else if (waited >= QueueRoom.ghostAfterSeconds * 1000 && !w.ghostTried) {
+        w.ghostTried = true;
+        void this.tryGhost(w, now);
+      }
     }
     const searching = this.waiting.size;
     for (const w of this.waiting.values()) {
@@ -78,16 +90,33 @@ export class QueueRoom extends Room {
         waited: Math.round(waited),
         range: Number.isFinite(range) ? Math.round(range) : null,
         searching,
-        botIn: Math.max(0, Math.round(QueueRoom.botAfterSeconds - waited)),
+        botIn: Math.max(0, Math.round((w.ghostTried ? QueueRoom.botAfterSeconds : QueueRoom.ghostAfterSeconds) - waited)),
       } satisfies QueueStatusMessage);
     }
   }
 
-  private async launch(players: Waiting[], mode: SeatMessage['mode']) {
+  /** Finds a ghost near the player's trophies; if there is one (and they're still waiting), battle it. */
+  private async tryGhost(w: Waiting, now: number) {
+    let ghosts: Ghost[] = [];
+    try {
+      ghosts = (await this.store?.ghosts(w.trophies, w.profileId, now)) ?? [];
+    } catch (err) {
+      logger.error('[queue] ghost lookup failed:', err);
+    }
+    // Paired with a person, or gone, while we looked.
+    if (this.waiting.get(w.client.sessionId) !== w || ghosts.length === 0) return;
+    const ghost = ghosts.reduce((best, g) => (Math.abs(g.trophies - w.trophies) < Math.abs(best.trophies - w.trophies) ? g : best));
+    this.waiting.delete(w.client.sessionId);
+    logger.info(`[queue] ${w.profileId} (${w.trophies}) fights ${ghost.id}'s ghost (${ghost.trophies})`);
+    void this.launch([w], 'ghost', ghost);
+  }
+
+  private async launch(players: Waiting[], mode: SeatMessage['mode'], ghost?: Ghost) {
     try {
       const room = await matchMaker.createRoom(ROOM_NAME, mode === 'ranked'
         ? { ranked: true, internalKey: INTERNAL_KEY } satisfies InternalOptions
-        : { training: true, internalKey: INTERNAL_KEY });
+        : mode === 'ghost' ? { ghost, internalKey: INTERNAL_KEY } satisfies InternalOptions
+          : { training: true, internalKey: INTERNAL_KEY });
       for (const p of players) {
         const reservation = await matchMaker.reserveSeatFor(room, {
           starters: p.starters, deck: p.deck, profileId: p.profileId, internalKey: INTERNAL_KEY,

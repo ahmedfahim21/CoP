@@ -1,6 +1,6 @@
 import { seededRandom, lerpSkill, ACE_SKILL, ROOKIE_SKILL, type BotSkill } from './bot.js';
 import { CARD_IDS, type CardId } from './cards.js';
-import { hashString, weekIndex } from './progression.js';
+import { hashString, weekIndex, weekKey } from './progression.js';
 import { trophyDelta, type Outcome } from './ranking.js';
 import { QUICK_RULES, STANDARD_RULES, type MatchRules, type TeamMods, type TowerHealth } from './sim.js';
 import { STARTER_IDS, type StarterPick } from './starters.js';
@@ -198,6 +198,11 @@ export const DRAFT_PICKS = 8;
 export function draftOffers(seed: number): Array<[CardId, CardId]> {
   const cards = shuffle(seededRandom(seed), CARD_IDS).slice(0, DRAFT_PICKS * 2);
   return Array.from({ length: DRAFT_PICKS }, (_, i) => [cards[2 * i]!, cards[2 * i + 1]!]);
+}
+
+/** The draft seed for a trainer this week: the same picks all week, different per trainer. */
+export function draftSeed(profileId: string, now: number): number {
+  return hashString(`draft:${weekKey(now)}:${profileId}`);
 }
 
 /** Whether `deck` is one card from each offered pair, in order. */
