@@ -216,7 +216,9 @@ h1, h2 { margin: 0; }
 /* --- Cards --------------------------------------------------------------- */
 
 .deck-head { display: flex; align-items: center; justify-content: space-between; }
-.deck-title { display: flex; align-items: center; gap: 8px; }
+/* In the top bar, the ⓘ matches the speaker button beside it. */
+.topbar .info-btn { width: 36px; height: 36px; border-radius: 0; box-shadow: var(--shadow); }
+.topbar .info-btn svg { width: 20px; height: 20px; }
 .info-btn { width: 28px; height: 28px; flex: none; display: grid; place-items: center; padding: 0; border: 2px solid var(--ink); border-radius: 50%; background: var(--card); box-shadow: var(--shadow-sm); cursor: pointer; transition: transform 120ms, box-shadow 120ms; }
 .info-btn:hover { background: var(--accent); }
 .info-btn:active { transform: translate(2px, 2px); box-shadow: none; }
@@ -806,11 +808,15 @@ h1, h2 { margin: 0; }
 /* --- Ranks and profile ------------------------------------------------------- */
 
 .score { font-size: 16px; white-space: nowrap; }
-.match-row.has-replay { grid-template-columns: 50px 1fr auto auto 34px; }
-.replay-btn { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; background: var(--purple); border: 2px solid var(--ink); box-shadow: var(--shadow-xs); cursor: pointer; }
-.replay-btn:hover { background: var(--accent); }
-.replay-btn:active { transform: translate(1px, 1px); box-shadow: none; }
-.replay-btn svg { width: 16px; height: 16px; stroke: var(--ink); stroke-width: 2.4; }
+.match-row.has-replay { grid-template-columns: 50px 1fr auto auto 30px; }
+/* Unrated rows: who it was against, centred where ranked rows show the trophy change. */
+.match-row .opponent-kind { justify-content: center; }
+.match-row .opponent-kind svg { width: 20px; height: 20px; stroke-width: 1.9; }
+.replay-btn { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); cursor: pointer; transition: transform 100ms, box-shadow 100ms; }
+.replay-btn:hover { background: var(--primary); }
+.replay-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+/* A solid play triangle reads at this size; the outline alone looked like an empty box. */
+.replay-btn svg { width: 15px; height: 15px; fill: var(--ink); stroke: var(--ink); stroke-width: 2; margin-left: 2px; }
 .adventure-summary { display: flex; flex-direction: column; gap: 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 10px; }
 .adventure-summary .row { align-items: center; }
 .adventure-summary .plate-sub { display: flex; align-items: center; gap: 4px; }
@@ -857,14 +863,29 @@ h1, h2 { margin: 0; }
 
 .replay-bar {
   position: absolute; left: 8px; right: 8px; bottom: calc(var(--tray-h) + 8px); z-index: 8;
-  display: flex; align-items: center; gap: 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 6px;
+  display: flex; align-items: center; gap: 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-md); padding: 6px 8px;
 }
-.replay-bar .btn { padding: 4px 10px 5px; font-size: 14px; box-shadow: var(--shadow-sm); }
-.replay-bar .icon-btn { width: 34px; height: 34px; }
-.replay-bar svg { width: 16px; height: 16px; }
-.replay-bar .done { background: #4ade80; }
-.replay-tag { margin-right: auto; font-size: 14px; background: var(--destructive); color: #fff; border: 2px solid var(--ink); padding: 1px 8px 2px; }
-.replay-tag::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: rec-blink 1.2s steps(1) infinite; }
+/* One row height for everything in the bar. */
+.replay-bar > * { height: 32px; flex: none; }
+.replay-tag { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; font-family: var(--head); font-size: 13px; background: var(--destructive); color: #fff; border: 2px solid var(--ink); }
+.replay-tag::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: rec-blink 1.2s steps(1) infinite; }
+.replay-icon { width: 32px; display: grid; place-items: center; padding: 0; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); cursor: pointer; transition: transform 100ms, box-shadow 100ms; }
+.replay-icon:hover { background: var(--accent); }
+.replay-icon:active { transform: translate(2px, 2px); box-shadow: none; }
+.replay-icon svg { width: 18px; height: 18px; stroke-width: 2.2; }
+.replay-icon.done { background: #4ade80; }
+.replay-speeds { display: flex; border: 2px solid var(--ink); box-shadow: var(--shadow-sm); }
+.replay-speed { min-width: 32px; padding: 0 6px; border: 0; border-right: 2px solid var(--ink); background: var(--card); font-family: var(--head); font-size: 13px; cursor: pointer; }
+.replay-speed:last-child { border-right: 0; }
+.replay-speed:hover { background: var(--accent); }
+.replay-speed[aria-pressed='true'] { background: var(--primary); }
+.replay-close { padding: 0 12px; background: var(--primary); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); font-family: var(--head); font-size: 14px; cursor: pointer; }
+.replay-close:active { transform: translate(2px, 2px); box-shadow: none; }
+/* Narrow phones: the tag keeps just its blinking dot. */
+@media (max-width: 420px) {
+  .replay-tag { padding: 0 8px; }
+  .replay-tag span { display: none; }
+}
 @keyframes rec-blink { 50% { opacity: 0; } }
 .replaying .tray { pointer-events: none; }
 .replaying .tray .card { cursor: default; }
@@ -877,5 +898,4 @@ h1, h2 { margin: 0; }
 @media (max-width: 380px) {
   .mini-deck { grid-template-columns: repeat(4, 1fr); }
   .puzzle-grid { grid-template-columns: repeat(2, 1fr); }
-  .replay-bar .btn { padding: 4px 7px 5px; }
 }

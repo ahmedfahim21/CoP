@@ -4,7 +4,7 @@ import { track } from '../analytics.js';
 import { LocalBattle } from '../local.js';
 import { h, icon } from './dom.js';
 import { BattleHud } from './hud.js';
-import { Copy, FastForward, Pause, Play, Restart } from './icons.js';
+import { Link, Pause, Play, Restart, Tick, ToStart } from './icons.js';
 
 /**
  * Watching a stored battle. Replays are a recipe (seed, loadouts, rules, plays per step),
@@ -33,27 +33,35 @@ export async function watchReplay(matchId: number, side: Team | null, onClose: (
   new ReplayViewer(res, res.replay, side ?? 0, onClose);
 }
 
+const SPEEDS = [1, 2, 4] as const;
+
 class ReplayViewer {
   private battle!: LocalBattle;
   private hud!: BattleHud;
   private readonly bar: HTMLDivElement;
-  private readonly playBtn = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Pause' } }, icon(Pause));
-  private readonly speedBtn = h('button', { class: 'btn small', textContent: '1×' });
+  private readonly playBtn = h('button', { class: 'replay-icon', attrs: { 'aria-label': 'Pause', title: 'Pause' } }, icon(Pause));
+  /** 1× / 2× / 4×, the current one highlighted. */
+  private readonly speedBtns = SPEEDS.map((s) => h('button', { class: 'replay-speed', textContent: `${s}×`, attrs: { 'aria-label': `${s}× speed`, 'aria-pressed': String(s === 1) } }));
   private speed = 1;
   private paused = false;
 
   constructor(private readonly res: ReplayResponse, private readonly replay: Replay, private readonly side: Team, private readonly onClose: () => void) {
-    const restart = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Restart' } }, icon(Restart));
-    const share = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Copy link' } }, icon(Copy));
-    const close = h('button', { class: 'btn small gold', textContent: 'Close' });
+    const restart = h('button', { class: 'replay-icon', attrs: { 'aria-label': 'Restart from the beginning', title: 'Restart' } }, icon(ToStart));
+    const share = h('button', { class: 'replay-icon', attrs: { 'aria-label': 'Copy a link to this replay', title: 'Copy link' } }, icon(Link));
+    const close = h('button', { class: 'replay-close', textContent: 'Close' });
     this.playBtn.addEventListener('click', () => this.togglePause());
-    this.speedBtn.addEventListener('click', () => this.cycleSpeed());
+    this.speedBtns.forEach((b, i) => b.addEventListener('click', () => this.setSpeed(SPEEDS[i]!)));
     restart.addEventListener('click', () => this.restart());
     share.addEventListener('click', async () => {
       const url = `${location.origin}${location.pathname}?replay=${res.id}&side=${side}`;
       try {
         await navigator.clipboard.writeText(url);
         share.classList.add('done');
+        share.replaceChildren(icon(Tick));
+        window.setTimeout(() => {
+          share.classList.remove('done');
+          share.replaceChildren(icon(Link));
+        }, 1600);
       } catch (err) {
         console.error('Copying the replay link failed', err);
         prompt('Copy the replay link:', url);
@@ -61,7 +69,12 @@ class ReplayViewer {
     });
     close.addEventListener('click', () => this.close());
     this.bar = h('div', { class: 'replay-bar' },
-      h('div', { class: 'replay-tag stroke', textContent: 'Replay' }), this.playBtn, this.speedBtn, restart, share, close);
+      h('div', { class: 'replay-tag', attrs: { 'aria-label': 'Replay' } }, h('span', { textContent: 'Replay' })),
+      this.playBtn,
+      h('div', { class: 'replay-speeds', attrs: { role: 'group', 'aria-label': 'Playback speed' } }, ...this.speedBtns),
+      restart,
+      share,
+      close);
     this.start();
   }
 
@@ -93,13 +106,13 @@ class ReplayViewer {
     this.battle.speed = this.paused ? 0 : this.speed;
     this.playBtn.replaceChildren(icon(this.paused ? Play : Pause));
     this.playBtn.setAttribute('aria-label', this.paused ? 'Play' : 'Pause');
+    this.playBtn.title = this.paused ? 'Play' : 'Pause';
   }
 
-  private cycleSpeed() {
-    this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 4 : 1;
-    this.speedBtn.textContent = `${this.speed}×`;
-    if (!this.paused) this.battle.speed = this.speed;
-    this.speedBtn.append(icon(FastForward));
+  private setSpeed(s: number) {
+    this.speed = s;
+    this.speedBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(SPEEDS[i] === s)));
+    if (!this.paused) this.battle.speed = s;
   }
 
   private restart() {
