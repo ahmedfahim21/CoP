@@ -85,6 +85,11 @@ const REASONS: Record<string, string> = {
 
 const MODE_NOTE: Record<MatchMode, string> = {
   ranked: '',
+  ghost: 'Ghost battle: only your trophies move, at half rate.',
+  league: '',
+  daily: '',
+  gauntlet: '',
+  event: '',
   friendly: 'Friendly battle: no trophies at stake.',
   training: 'Training battle: no trophies at stake.',
   casual: 'Unrated battle.',

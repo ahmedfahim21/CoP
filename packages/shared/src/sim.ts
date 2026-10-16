@@ -78,6 +78,7 @@ export const STANDARD_RULES: MatchRules = {
 /** Training against the bot: 2:00 with double elixir after 30 seconds, 0:30 overtime, towers at 60%; a tie is a draw. */
 export const QUICK_RULES: MatchRules = { regularSeconds: 120, overtimeSeconds: 30, doubleElixirAt: 90, towerHpScale: 0.6, tiebreak: false };
 
+/** Default rules for a mode; League, Daily, Gauntlet and event battles bring their own. */
 export function rulesFor(mode: MatchMode): MatchRules {
   return mode === 'training' ? QUICK_RULES : STANDARD_RULES;
 }

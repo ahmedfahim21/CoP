@@ -81,7 +81,7 @@ describe('profile API', () => {
     const me = await colyseus.http.get('/api/profiles/me', auth(credential));
     expect((me.data as OwnProfileResponse).profile).toMatchObject({ id: profile.id, deck: profile.deck });
 
-    const deck = ['magikarp', 'geodude', 'dugtrio', 'gengar', 'chansey', 'scyther', 'jolteon', 'rapidash'];
+    const deck = ['magikarp', 'primeape', 'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'snorlax'];
     const patched = await colyseus.http.patch('/api/profiles/me', { ...auth(credential), body: JSON.stringify({ name: 'Misty W', deck, starters: ['squirtle', 'bulbasaur'] }) });
     expect((patched.data as OwnProfileResponse).profile).toMatchObject({ name: 'Misty W', deck, starters: ['squirtle', 'bulbasaur'] });
 

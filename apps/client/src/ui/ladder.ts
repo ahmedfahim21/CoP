@@ -48,7 +48,10 @@ function statGrid(p: ProfileStats): HTMLDivElement {
   );
 }
 
-const MODE_LABEL: Record<MatchRecord['mode'], string> = { ranked: 'Ranked', friendly: 'Friendly', training: 'Training', casual: 'Casual' };
+export const MODE_LABEL: Record<MatchRecord['mode'], string> = {
+  ranked: 'Ranked', ghost: 'Ghost', league: 'League', daily: 'Daily Challenge', gauntlet: 'Gauntlet', event: 'Event',
+  friendly: 'Friendly', training: 'Training', casual: 'Casual',
+};
 
 function matchList(matches: MatchRecord[]): HTMLElement {
   if (matches.length === 0) return h('div', { class: 'hint', textContent: 'No battles yet. Hit Battle to get on the ladder!' });
