@@ -1,4 +1,5 @@
-import { h } from './dom.js';
+import { h, icon } from './dom.js';
+import { Info } from './icons.js';
 
 interface Credit {
   name: string;
@@ -36,6 +37,13 @@ const SECTIONS: Array<{ title: string; items: Credit[] }> = [
   },
 ];
 
+/** The ⓘ that opens the credits. */
+export function creditsButton(): HTMLButtonElement {
+  const b = h('button', { class: 'info-btn', attrs: { 'aria-label': 'Credits', title: 'Credits' } }, icon(Info));
+  b.addEventListener('click', showCredits);
+  return b;
+}
+
 /** The credits: who made the game and whose work it stands on. */
 export function showCredits() {
   const close = h('button', { class: 'btn gold', textContent: 'OK' });
@@ -49,7 +57,9 @@ export function showCredits() {
       h('p', { class: 'credits-by' },
         'Clash of Pokémons by ',
         h('a', { href: 'https://github.com/ahmedfahim21', target: '_blank', rel: 'noopener noreferrer', textContent: 'ahmedfahim21' }),
-        '. ',
+        ' (',
+        h('a', { href: 'https://x.com/ahmedfahim21_', target: '_blank', rel: 'noopener noreferrer', textContent: '@ahmedfahim21_ on X' }),
+        '). ',
         h('a', { href: 'https://github.com/ahmedfahim21/CoP', target: '_blank', rel: 'noopener noreferrer', textContent: 'Source on GitHub' }),
         '.'),
       ...SECTIONS.map((s) => h('section', { class: 'credits-section' },

@@ -1,12 +1,13 @@
 import { Client, type Room } from '@colyseus/sdk';
 import {
   MSG, QUEUE_ROOM_NAME, ROOM_NAME,
-  type CardId, type ErrorMessage, type GameEvent, type HandMessage, type JoinOptions, type MatchMode, type PlayMessage,
+  type AdventureRequest, type CardId, type ErrorMessage, type GameEvent, type HandMessage, type JoinOptions, type MatchMode, type PlayMessage,
   type QueueJoinOptions, type QueueStatusMessage, type RematchMessage, type RematchStateMessage, type SeatMessage,
   type StarterPick, type SummaryMessage, type Team,
 } from '@cop/shared';
 import { BattleState } from '@cop/shared/schema';
 import { SERVER_URL } from './config.js';
+import type { BattleSource, MapLike } from './three/battle.js';
 
 const client = new Client(SERVER_URL);
 
@@ -17,6 +18,43 @@ interface SessionEvents {
   summary: SummaryMessage;
   rematchState: RematchStateMessage;
   rematch: RematchMessage;
+}
+
+/** A player as the HUD reads them (network PlayerInfo, or a local stand-in). */
+export interface PlayerLike {
+  team: number;
+  name: string;
+  elixir: number;
+  crowns: number;
+  connected: boolean;
+  trophies: number;
+  profileId: string;
+  bot: boolean;
+  ghost: boolean;
+  level: number;
+}
+
+/**
+ * What the battle HUD needs from a battle: the networked Session, or a LocalBattle simulated
+ * in the browser (puzzles).
+ */
+export interface BattleSession extends BattleSource {
+  readonly hand: HandMessage | null;
+  readonly room: { readonly sessionId: string };
+  readonly state: BattleSource['state'] & {
+    phase: string;
+    timeLeft: number;
+    doubleElixir: boolean;
+    mode: string;
+    title: string;
+    twist: string;
+    regularSeconds: number;
+    players: MapLike<PlayerLike> & { get(key: string): PlayerLike | undefined };
+  };
+  on(event: 'hand', fn: (m: HandMessage) => void): () => void;
+  on(event: 'error', fn: (m: ErrorMessage) => void): () => void;
+  on(event: 'fx', fn: (events: GameEvent[]) => void): () => void;
+  play(message: PlayMessage): void;
 }
 
 /**
@@ -147,6 +185,12 @@ export async function rankedSearch(l: Loadout & { credential: string }, onStatus
 
 export async function training(l: Loadout): Promise<Session> {
   const room = await client.create(ROOM_NAME, { ...joinOptions(l), training: true } satisfies JoinOptions, BattleState);
+  return new Session(room, l);
+}
+
+/** A single-player battle: a League stage, the Daily Challenge, a Gauntlet run or this week's event. */
+export async function adventure(l: Loadout, request: AdventureRequest): Promise<Session> {
+  const room = await client.create(ROOM_NAME, { ...joinOptions(l), adventure: request } satisfies JoinOptions, BattleState);
   return new Session(room, l);
 }
 

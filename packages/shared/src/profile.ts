@@ -1,11 +1,20 @@
 import type { CardId } from './cards.js';
+import type { Progress } from './progression.js';
 import type { Outcome } from './ranking.js';
 import type { ResultReason } from './sim.js';
 import type { StarterPick } from './starters.js';
 
 /** Shapes of the profile and leaderboard HTTP API (`/api/*`). */
 
-export type MatchMode = 'ranked' | 'friendly' | 'training' | 'casual';
+/**
+ * ranked: two trainers, trophies move. ghost: you against the bot playing a real trainer's
+ * deck, only your trophies move (at half rate). league, daily, gauntlet, event: single-player
+ * modes against the bot. friendly: a private room. training: free practice. casual: unrated.
+ */
+export type MatchMode = 'ranked' | 'ghost' | 'league' | 'daily' | 'gauntlet' | 'event' | 'friendly' | 'training' | 'casual';
+
+/** Modes that move trophies. */
+export const RATED_MODES: readonly MatchMode[] = ['ranked', 'ghost'];
 
 export interface ProfileStats {
   trophies: number;
@@ -29,12 +38,27 @@ export interface PublicProfile extends ProfileStats {
   createdAt: number;
   /** Ladder position, or null before the first battle of any kind. */
   rank: number | null;
+  level: number;
+  /** League stages cleared, by id, and total stars. */
+  badges: string[];
+  stars: number;
+  gauntletBest: number;
+  /** Past ladder seasons, newest first. */
+  seasons: SeasonResult[];
+}
+
+export interface SeasonResult {
+  /** e.g. "2026-10". */
+  season: string;
+  trophies: number;
+  rank: number;
 }
 
 /** What the owner sees: their loadout too. */
 export interface OwnProfile extends PublicProfile {
   deck: CardId[];
   starters: StarterPick;
+  progress: Progress;
 }
 
 export interface MatchRecord {
@@ -48,6 +72,10 @@ export interface MatchRecord {
   /** Trophy change for this player (0 outside ranked). */
   delta: number;
   opponent: { id: string | null; name: string; trophies: number };
+  /** Whether the battle can be watched again (GET /api/replays/:id). */
+  hasReplay?: boolean;
+  /** This player's side in the battle (for watching a replay from it). */
+  team?: number;
 }
 
 export interface ProfileResponse {
@@ -83,6 +111,34 @@ export interface LeaderboardEntry {
   battles: number;
   /** Has played ranked; otherwise on the ladder with no trophies from bot or friendly battles. */
   rated: boolean;
+  /** Total XP, for the trainer level. */
+  xp?: number;
+}
+
+/** A Daily Challenge or Gauntlet board. */
+export interface ScoreboardResponse {
+  board: 'daily' | 'gauntlet';
+  /** The day ("2026-10-16") or season ("2026-10"). */
+  period: string;
+  entries: Array<{ rank: number; id: string; name: string; score: number }>;
+  total: number;
+}
+
+export interface ReplayResponse {
+  id: number;
+  playedAt: number;
+  mode: MatchMode;
+  winner: number | null;
+  reason: ResultReason;
+  replay: unknown;
+  players: Array<{ team: number; name: string; profileId: string | null; crowns: number }>;
+}
+
+/** Live counts for the Battle tab. */
+export interface StatusResponse {
+  online: number;
+  searching: number;
+  inBattle: number;
 }
 
 export interface LeaderboardResponse {

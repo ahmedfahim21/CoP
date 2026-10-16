@@ -68,11 +68,11 @@ describe('matchmaking', () => {
     expect(state.resultReason).toBe('');
     expect(state.players[a.sessionId]).toEqual({
       sessionId: a.sessionId, name: 'Ash Ketchum of P', team: 0, elixir: 5, crowns: 0, starterLeft: 'bulbasaur', starterRight: 'charmander', connected: true,
-      trophies: 0, profileId: '', bot: false,
+      trophies: 0, profileId: '', bot: false, ghost: false, level: 0,
     });
     expect(state.players[b.sessionId]).toEqual({
       sessionId: b.sessionId, name: 'Trainer', team: 1, elixir: 5, crowns: 0, starterLeft: 'squirtle', starterRight: 'charmander', connected: true,
-      trophies: 0, profileId: '', bot: false,
+      trophies: 0, profileId: '', bot: false, ghost: false, level: 0,
     });
     const towers = Object.values(state.entities);
     expect(towers).toHaveLength(6);

@@ -1,4 +1,4 @@
-import { DEFAULT_DECK, type OwnProfile, type OwnProfileResponse } from '@cop/shared';
+import { DEFAULT_DECK, emptyProgress, type OwnProfile, type OwnProfileResponse } from '@cop/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A browser-ish world for prefs/profile: localStorage and window timers.
@@ -27,7 +27,8 @@ const { ProfileSession } = await import('./profile.js');
 const CREDENTIAL = 'PYLQ0289.abcdefghijklmnopqrstuvwxyz012345';
 const profile = (over: Partial<OwnProfile> = {}): OwnProfile => ({
   id: 'PYLQ0289', name: 'Trainer', createdAt: 0, rank: null, trophies: 0, bestTrophies: 0, wins: 0, losses: 0, draws: 0,
-  threeCrowns: 0, streak: 0, bestStreak: 0, battles: 0, deck: [...DEFAULT_DECK], starters: ['charmander', 'squirtle'], ...over,
+  threeCrowns: 0, streak: 0, bestStreak: 0, battles: 0, deck: [...DEFAULT_DECK], starters: ['charmander', 'squirtle'],
+  level: 1, badges: [], stars: 0, gauntletBest: 0, seasons: [], progress: emptyProgress(), ...over,
 });
 const res = (p: OwnProfile): OwnProfileResponse => ({ profile: p, matches: [] });
 /** The name the server ends up with: echo whatever updateMe was sent. */

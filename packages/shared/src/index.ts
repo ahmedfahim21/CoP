@@ -8,3 +8,8 @@ export * from './ranking.js';
 export * from './profile.js';
 export * from './bot.js';
 export * from './cardInfo.js';
+export * from './replay.js';
+export * from './campaign.js';
+export * from './progression.js';
+export * from './modes.js';
+export * from './puzzles.js';

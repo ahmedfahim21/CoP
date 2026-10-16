@@ -1,6 +1,6 @@
 import { Crown, Trophy } from './icons.js';
 import { CARDS, ELIXIR_MAX, rulesFor, type CardId, type ErrorMessage, type HandMessage, type MatchMode, type Point, type Team } from '@cop/shared';
-import type { Session } from '../net.js';
+import type { BattleSession } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';
 import { cardEl, setCard } from './cards.js';
 import { h, icon } from './dom.js';
@@ -66,7 +66,7 @@ export class BattleHud {
   private toastTimer = 0;
   private readonly unsubs: Array<() => void> = [];
 
-  constructor(private readonly session: Session, private readonly onEnded: () => void) {
+  constructor(private readonly session: BattleSession, private readonly onEnded: () => void) {
     this.team = session.team!;
     this.el = h('div', { attrs: { id: 'battle' } },
       h('div', { class: 'battle-stage' }, this.stageHost, this.barsLayer, this.textLayer, this.center),
@@ -97,6 +97,21 @@ export class BattleHud {
     this.unsubs.push(this.view.stage.onFrame(() => this.tick()));
     if (session.hand) this.setHand(session.hand);
     this.setupStageInput();
+    this.showIntro();
+  }
+
+  /** Single-player battles open with what they are and their twist, for a few seconds. */
+  private showIntro() {
+    const { title, twist } = this.session.state;
+    if (!title && !twist) return;
+    const card = h('div', { class: 'battle-intro' },
+      title ? h('div', { class: 'battle-intro-title stroke', textContent: title }) : null,
+      twist ? h('div', { class: 'battle-intro-twist', textContent: twist }) : null);
+    this.el.append(card);
+    const hide = () => card.classList.add('gone');
+    window.setTimeout(hide, 5500);
+    card.addEventListener('click', hide);
+    card.addEventListener('transitionend', () => card.remove());
   }
 
   dispose() {
@@ -280,9 +295,9 @@ export class BattleHud {
   private tick() {
     const s = this.session.state;
     // Timer.
-    // Before the start, show the full clock for this mode (training is shorter).
+    // Before the start, show the full clock for this battle (training, the League and others are shorter).
     const t = s.phase === 'countdown' || s.phase === 'waiting'
-      ? rulesFor(s.mode as MatchMode).regularSeconds
+      ? s.regularSeconds || rulesFor(s.mode as MatchMode).regularSeconds
       : Math.max(0, Math.ceil(s.timeLeft));
     this.timerValue.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
     this.timerLabel.textContent = s.phase === 'overtime' ? 'Overtime' : 'Time left';
@@ -290,7 +305,7 @@ export class BattleHud {
 
     // Countdown and announcements.
     if (s.phase === 'countdown') {
-      const n = Math.max(1, t);
+      const n = Math.max(1, Math.ceil(s.timeLeft));
       if (n !== this.lastCount) {
         this.lastCount = n;
         this.announce(String(n), 'big');

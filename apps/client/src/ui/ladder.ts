@@ -1,8 +1,9 @@
-import { Bot, Copy, Crown, Flame, Key, Medal, Refresh, Swords, Trophy, Users } from './icons.js';
+import { Bot, Calendar, Copy, Crown, Flame, Key, Medal, Play, Refresh, Route, Swords, Trophy, Users } from './icons.js';
 import {
-  arenaFor, nextArena, winRate,
-  type LeaderboardEntry, type MatchRecord, type ProfileStats, type PublicProfile,
+  STAGES, arenaFor, levelFor, nextArena, winRate,
+  type LeaderboardEntry, type MatchRecord, type ProfileStats, type PublicProfile, type ScoreboardResponse, type Team,
 } from '@cop/shared';
+import { badgeRow, levelBadge, xpBar } from './progress.js';
 import { api } from '../api.js';
 import type { ProfileSession } from '../profile.js';
 import { h, icon } from './dom.js';
@@ -48,22 +49,64 @@ function statGrid(p: ProfileStats): HTMLDivElement {
   );
 }
 
-const MODE_LABEL: Record<MatchRecord['mode'], string> = { ranked: 'Ranked', friendly: 'Friendly', training: 'Training', casual: 'Casual' };
+export const MODE_LABEL: Record<MatchRecord['mode'], string> = {
+  ranked: 'Ranked', ghost: 'Ghost', league: 'League', daily: 'Daily Challenge', gauntlet: 'Gauntlet', event: 'Event',
+  friendly: 'Friendly', training: 'Training', casual: 'Casual',
+};
 
-function matchList(matches: MatchRecord[]): HTMLElement {
+/** Opens a stored battle's replay from `team`'s side. */
+export type OnReplay = (matchId: number, team: Team) => void;
+
+function matchList(matches: MatchRecord[], onReplay?: OnReplay): HTMLElement {
   if (matches.length === 0) return h('div', { class: 'hint', textContent: 'No battles yet. Hit Battle to get on the ladder!' });
   return h('ol', { class: 'match-list' }, ...matches.map((m) => {
     const when = new Date(m.playedAt);
-    return h('li', { class: `match-row ${m.outcome}` },
+    let watch: HTMLButtonElement | null = null;
+    if (onReplay && m.hasReplay) {
+      watch = h('button', { class: 'replay-btn', attrs: { 'aria-label': 'Watch replay', title: 'Watch replay' } }, icon(Play));
+      watch.addEventListener('click', () => onReplay(m.id, (m.team ?? 0) as Team));
+    }
+    return h('li', { class: `match-row ${m.outcome}${watch ? ' has-replay' : ''}` },
       h('div', { class: 'match-outcome stroke', textContent: m.outcome === 'win' ? 'Win' : m.outcome === 'loss' ? 'Loss' : 'Draw' }),
       h('div', { class: 'match-who' },
         h('div', { class: 'plate-name', textContent: m.opponent.name }),
         h('div', { class: 'plate-sub', textContent: `${MODE_LABEL[m.mode]}${m.reason === 'tiebreak' ? ' · Tower health' : ''} · ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` }),
       ),
       h('div', { class: 'match-crowns stroke' }, icon(Crown), `${m.crowns}–${m.opponentCrowns}`),
-      m.mode === 'ranked' ? deltaPill(m.delta) : h('div', { class: 'delta' }, icon(m.opponent.id ? Users : Bot)),
+      m.mode === 'ranked' || m.mode === 'ghost' ? deltaPill(m.delta) : h('div', { class: 'delta opponent-kind', attrs: { title: m.opponent.id ? 'Against a trainer' : 'Against the bot' } }, icon(m.opponent.id ? Users : Bot)),
+      watch,
     );
   }));
+}
+
+function seasonList(p: PublicProfile): HTMLElement | null {
+  if (!p.seasons?.length) return null;
+  return h('div', { class: 'seasons' },
+    h('h2', { class: 'section-title' }, icon(Calendar), 'Past seasons'),
+    h('ol', { class: 'season-list' }, ...p.seasons.map((s) => h('li', {},
+      h('span', { class: 'stroke', textContent: seasonName(s.season) }),
+      h('span', { textContent: `#${s.rank}` }),
+      trophyPill(s.trophies)))));
+}
+
+function seasonName(season: string): string {
+  const [y, m] = season.split('-').map(Number);
+  return new Date(Date.UTC(y!, (m ?? 1) - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** Level, League badges and Gauntlet best: what a trainer has done beyond the ladder. */
+function adventureSummary(p: PublicProfile): HTMLElement {
+  const stars: Record<string, number> = {};
+  for (const id of p.badges ?? []) stars[id] = 1;
+  return h('div', { class: 'adventure-summary' },
+    h('div', { class: 'row' },
+      levelBadge(p.level ?? 1, 'big'),
+      h('div', { class: 'grow' },
+        h('div', { class: 'plate-sub', textContent: `${p.badges?.length ?? 0}/${STAGES.length} League badges · ${p.stars ?? 0} stars` }),
+        badgeRow(stars)),
+    ),
+    p.gauntletBest ? h('div', { class: 'plate-sub' }, icon(Route), ` Gauntlet best: round ${p.gauntletBest}`) : null,
+  );
 }
 
 function profileHeader(p: PublicProfile, look: 'red' | 'blue'): HTMLDivElement {
@@ -92,6 +135,7 @@ export function showProfileModal(id: string, mine: boolean) {
     body.replaceChildren(
       profileHeader(profile, mine ? 'red' : 'blue'),
       arenaProgress(profile.trophies),
+      adventureSummary(profile),
       statGrid(profile),
       h('h2', { class: 'section-title', textContent: 'Recent battles' }),
       matchList(matches.slice(0, 8)),
@@ -104,18 +148,39 @@ export function showProfileModal(id: string, mine: boolean) {
 }
 
 /** The Ranks tab: the top of the ladder, and where you stand. */
+type Board = 'trophies' | ScoreboardResponse['board'];
+
+const BOARD_HINT: Record<Board, string> = {
+  trophies: 'Ranked and ghost battles move trophies. League, training and friendly battles never do.',
+  daily: 'Today’s Daily Challenge: everyone plays the same deck. Resets at midnight UTC.',
+  gauntlet: 'Furthest Gauntlet run this month.',
+};
+
 export class RanksPanel {
   readonly el = h('div', { class: 'tab-panel' });
   private readonly list = h('div', { class: 'ladder' });
   private readonly footer = h('div', { class: 'ladder-me' });
+  private readonly hint = h('div', { class: 'hint' });
+  private readonly seg = h('div', { class: 'segmented', attrs: { role: 'tablist' } });
+  private board: Board = 'trophies';
   private loading = false;
 
   constructor(private readonly profiles: ProfileSession) {
     const refresh = h('button', { class: 'btn small icon-btn', attrs: { 'aria-label': 'Refresh leaderboard' } }, icon(Refresh));
     refresh.addEventListener('click', () => void this.load());
+    for (const [b, label, ic] of [['trophies', 'Trophies', Trophy], ['daily', 'Daily', Calendar], ['gauntlet', 'Gauntlet', Route]] as const) {
+      const btn = h('button', { class: 'seg-btn', data: { view: b }, attrs: { role: 'tab', 'aria-selected': String(b === this.board) } }, icon(ic), label);
+      btn.addEventListener('click', () => {
+        this.board = b;
+        for (const x of this.seg.children) x.setAttribute('aria-selected', String((x as HTMLElement).dataset.view === b));
+        void this.load();
+      });
+      this.seg.append(btn);
+    }
     this.el.append(
       h('div', { class: 'deck-head' }, h('h2', { textContent: 'Kanto Ladder' }), refresh),
-      h('div', { class: 'hint', textContent: 'Ranked battles move trophies. Friendly and training battles never do.' }),
+      this.seg,
+      this.hint,
       this.list,
       this.footer,
     );
@@ -125,10 +190,15 @@ export class RanksPanel {
   async load() {
     if (this.loading) return;
     this.loading = true;
+    this.hint.textContent = BOARD_HINT[this.board];
     this.list.replaceChildren(h('div', { class: 'spinner' }));
     try {
-      const { entries, total } = await api.leaderboard(50);
-      this.render(entries, total);
+      if (this.board === 'trophies') {
+        const { entries, total } = await api.leaderboard(50);
+        this.render(entries, total);
+      } else {
+        this.renderScores(await api.scores(this.board));
+      }
     } catch (err) {
       console.error('Loading the leaderboard failed', err);
       this.list.replaceChildren(h('div', { class: 'error-text', textContent: err instanceof Error ? err.message : String(err) }));
@@ -148,7 +218,7 @@ export class RanksPanel {
           const row = h('li', { class: `ladder-row${e.id === me ? ' me' : ''}${e.rank <= 3 ? ` top${e.rank}` : ''}${e.rated ? '' : ' unrated'}` },
             h('div', { class: 'ladder-rank stroke' }, e.rank <= 3 ? icon(Medal) : null, String(e.rank)),
             h('div', { class: 'ladder-who' },
-              h('div', { class: 'plate-name', textContent: e.name }),
+              h('div', { class: 'plate-name' }, levelBadge(levelFor(e.xp ?? 0).level, 'tiny'), e.name),
               h('div', { class: 'plate-sub', textContent: e.rated ? `${arenaFor(e.trophies).name} · ${e.wins}W ${e.losses}L` : `Unrated · ${e.battles} battle${e.battles === 1 ? '' : 's'}` }),
             ),
             trophyPill(e.trophies),
@@ -161,7 +231,28 @@ export class RanksPanel {
     this.renderMe();
   }
 
+  private renderScores(res: ScoreboardResponse) {
+    const me = this.profiles.profile?.id;
+    this.footer.replaceChildren();
+    if (res.entries.length === 0) {
+      this.list.replaceChildren(h('div', { class: 'hint', textContent: res.board === 'daily' ? 'No scores yet today. Play the Daily Challenge in Adventure!' : 'No runs yet this season. Start one in Adventure!' }));
+      return;
+    }
+    this.list.replaceChildren(
+      h('div', { class: 'plate-sub ladder-total', textContent: `${res.total} trainer${res.total === 1 ? '' : 's'}` }),
+      h('ol', { class: 'ladder-list' }, ...res.entries.map((e) => {
+        const row = h('li', { class: `ladder-row${e.id === me ? ' me' : ''}${e.rank <= 3 ? ` top${e.rank}` : ''}` },
+          h('div', { class: 'ladder-rank stroke' }, e.rank <= 3 ? icon(Medal) : null, String(e.rank)),
+          h('div', { class: 'ladder-who' }, h('div', { class: 'plate-name', textContent: e.name })),
+          h('div', { class: 'score stroke', textContent: res.board === 'gauntlet' ? `Round ${e.score}` : e.score.toLocaleString('en') }));
+        row.addEventListener('click', () => showProfileModal(e.id, e.id === me));
+        return row;
+      })),
+    );
+  }
+
   private renderMe() {
+    if (this.board !== 'trophies') return;
     const p = this.profiles.profile;
     this.footer.replaceChildren(p
       ? h('div', { class: 'ladder-row me' },
@@ -176,7 +267,7 @@ export class RanksPanel {
 export class ProfilePanel {
   readonly el = h('div', { class: 'tab-panel' });
 
-  constructor(private readonly profiles: ProfileSession) {
+  constructor(private readonly profiles: ProfileSession, private readonly onReplay?: OnReplay) {
     profiles.onChange(() => this.render());
     this.render();
   }
@@ -187,7 +278,7 @@ export class ProfilePanel {
       const retry = h('button', { class: 'btn small' }, icon(Refresh, 'btn-icon'), ' Retry');
       retry.addEventListener('click', () => void this.profiles.connect());
       this.el.replaceChildren(
-        h('h2', { textContent: 'Trainer Profile' }),
+        profileHeading(null),
         status === 'loading'
           ? h('div', { class: 'spinner' })
           : h('div', { class: 'panel' },
@@ -200,14 +291,15 @@ export class ProfilePanel {
     }
     const parts: Array<HTMLElement | null> = [
       // Name, portrait, rank and trophies are already in the top bar; only the tag is new here.
-      h('div', { class: 'profile-heading' },
-        h('h2', { textContent: 'Trainer Profile' }),
-        h('div', { class: 'profile-tag', textContent: `#${profile.id}` })),
+      profileHeading(profile.id),
+      xpBar(profile.progress.xp),
       arenaProgress(profile.trophies),
+      adventureSummary(profile),
       profile.streak >= 2 ? h('div', { class: 'streak stroke' }, icon(Flame), `${profile.streak} win streak!`) : null,
       statGrid(profile),
+      seasonList(profile),
       h('h2', { class: 'section-title' }, icon(Swords), 'Battle log'),
-      matchList(this.profiles.matches),
+      matchList(this.profiles.matches, this.onReplay),
       this.restorePanel(),
     ];
     this.el.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
@@ -250,4 +342,11 @@ export class ProfilePanel {
       error,
     );
   }
+}
+
+/** "Trainer Profile", and the player tag once the profile is known. */
+function profileHeading(tag: string | null): HTMLDivElement {
+  return h('div', { class: 'profile-heading' },
+    h('h2', { textContent: 'Trainer Profile' }),
+    tag ? h('div', { class: 'profile-tag', textContent: `#${tag}` }) : null);
 }

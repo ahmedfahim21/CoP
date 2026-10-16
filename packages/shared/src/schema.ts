@@ -62,6 +62,10 @@ export const PlayerInfo = schema({
   /** Profile tag, empty for guests and bots. */
   profileId: t.string(),
   bot: t.boolean(),
+  /** The bot playing a real trainer's deck (profileId is theirs). */
+  ghost: t.boolean(),
+  /** Trainer level; 0 for guests and bots. */
+  level: t.uint8(),
 }, 'PlayerInfo');
 export type PlayerInfo = SchemaType<typeof PlayerInfo>;
 
@@ -79,7 +83,13 @@ export const BattleState = schema({
   winner: t.int8(),
   /** Empty while playing. */
   resultReason: t.string(),
-  /** 'ranked' | 'friendly' | 'training' | 'casual'. */
+  /** A MatchMode: 'ranked', 'ghost', 'league', 'daily', 'gauntlet', 'event', 'friendly', 'training' or 'casual'. */
   mode: t.string(),
+  /** What this battle is, for single-player modes, e.g. "Brock · Pewter Gym"; empty otherwise. */
+  title: t.string(),
+  /** Its special rules in a sentence, e.g. a gym's twist; empty otherwise. */
+  twist: t.string(),
+  /** Seconds of regular time, so the timer reads right before the start (0 if unknown). */
+  regularSeconds: t.uint16(),
 }, 'BattleState');
 export type BattleState = SchemaType<typeof BattleState>;

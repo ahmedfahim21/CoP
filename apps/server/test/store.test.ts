@@ -36,13 +36,22 @@ describe('profiles', () => {
 
   it('updates name, deck and starters, rejecting invalid ones', async () => {
     const { profile } = (await store.create('Ash'));
-    const deck: CardId[] = ['magikarp', 'geodude', 'dugtrio', 'gengar', 'chansey', 'scyther', 'jolteon', 'rapidash'];
+    const deck: CardId[] = ['magikarp', 'primeape', 'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'snorlax'];
     const ok = (await store.update(profile.id, { name: 'Red', deck, starters: ['bulbasaur', 'squirtle'] }));
     expect(ok.rejected).toEqual([]);
     expect(ok.profile).toMatchObject({ name: 'Red', deck, starters: ['bulbasaur', 'squirtle'] });
     const bad = (await store.update(profile.id, { deck: ['pikachu'] as CardId[], starters: ['bulbasaur', 'bulbasaur'] }));
     expect(bad.rejected).toEqual(['deck', 'starters']);
     expect(bad.profile).toMatchObject({ deck, starters: ['bulbasaur', 'squirtle'] });
+  });
+
+  it('only accepts decks of unlocked cards', async () => {
+    const { profile } = await store.create('Newbie');
+    const locked: CardId[] = ['magikarp', 'golem', 'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'snorlax'];
+    expect((await store.update(profile.id, { deck: locked })).rejected).toEqual(['deck']);
+    await store.updateProgress(profile.id, (p) => ({ progress: { ...p, stars: { brock: 1 } }, result: null }));
+    expect((await store.update(profile.id, { deck: locked })).rejected).toEqual([]);
+    expect((await store.own(profile.id))!.progress.stars).toEqual({ brock: 1 });
   });
 
 });
@@ -76,8 +85,8 @@ describe('matches', () => {
     const board = await store.leaderboard();
     expect(board.total).toBe(2);
     expect(board.entries).toEqual([
-      { rank: 1, id: a, name: 'A', trophies: 0, wins: 0, losses: 0, battles: 5, rated: false },
-      { rank: 2, id: b, name: 'B', trophies: 0, wins: 0, losses: 0, battles: 1, rated: false },
+      { rank: 1, id: a, name: 'A', trophies: 0, wins: 0, losses: 0, battles: 5, rated: false, xp: 0 },
+      { rank: 2, id: b, name: 'B', trophies: 0, wins: 0, losses: 0, battles: 1, rated: false, xp: 0 },
     ]);
     expect((await store.recentMatches(a))).toHaveLength(5);
   });
@@ -130,7 +139,7 @@ describe('leaderboard', () => {
     expect(board.entries[0]).toMatchObject({ trophies: 30, wins: 1, battles: 1, rated: true });
     // Lost its only ranked game: still rated, and above the bot-only trainer despite being newer.
     expect(board.entries[1]).toMatchObject({ trophies: 0, losses: 1, battles: 1, rated: true });
-    expect(board.entries[2]).toEqual({ rank: 3, id: botOnly, name: 'Bot fan', trophies: 0, wins: 0, losses: 0, battles: 3, rated: false });
+    expect(board.entries[2]).toEqual({ rank: 3, id: botOnly, name: 'Bot fan', trophies: 0, wins: 0, losses: 0, battles: 3, rated: false, xp: 0 });
     for (const e of board.entries) expect(await store.rankOf(e.id)).toBe(e.rank);
     // Nobody who hasn't battled is listed or ranked.
     expect(await store.rankOf(idle)).toBeNull();
@@ -149,5 +158,105 @@ describe('leaderboard', () => {
     expect(board.entries.map((e) => e.rank)).toEqual([1, 2, 3, 4]);
     for (const e of board.entries) expect((await store.rankOf(e.id))).toBe(e.rank);
     expect((await store.leaderboard(2, 2)).entries.map((e) => [e.rank, e.id])).toEqual([[3, p2], [4, p4]]);
+  });
+});
+
+describe('ghost battles', () => {
+  it('move only the challenger’s trophies, at half rate, and leave the ghost a history entry', async () => {
+    const me = (await store.create('Me')).profile.id;
+    const owner = (await store.create('Ghost owner')).profile.id;
+    const { sides } = await store.recordBattle({ ...ranked(me, owner, 0, [2, 0]), mode: 'ghost', ghostTeam: 1 });
+    expect(sides[0]).toEqual({ trophiesBefore: 0, delta: 15 });
+    expect(sides[1]).toEqual({ trophiesBefore: 0, delta: 0 });
+    expect(await store.get(me)).toMatchObject({ trophies: 15, wins: 1, battles: 1 });
+    expect(await store.get(owner)).toMatchObject({ trophies: 0, losses: 0, battles: 0 });
+    expect((await store.recentMatches(owner))[0]).toMatchObject({ mode: 'ghost', outcome: 'loss', opponent: { id: me } });
+  });
+});
+
+describe('progress', () => {
+  it('concurrent updates both land', async () => {
+    const id = (await store.create('Busy')).profile.id;
+    await Promise.all([
+      store.updateProgress(id, (p) => ({ progress: { ...p, xp: p.xp + 10 }, result: null })),
+      store.updateProgress(id, (p) => ({ progress: { ...p, xp: p.xp + 5 }, result: null })),
+    ]);
+    expect((await store.progress(id))!.xp).toBe(15);
+    expect(await store.updateProgress('00000000', (p) => ({ progress: p, result: 1 }))).toBeNull();
+  });
+
+  it('public profiles show level, badges and stars', async () => {
+    const id = (await store.create('Climber')).profile.id;
+    await store.updateProgress(id, (p) => ({ progress: { ...p, xp: 500, stars: { brock: 3, misty: 1 }, gauntletBest: 4 }, result: null }));
+    expect(await store.get(id)).toMatchObject({ level: 4, badges: ['brock', 'misty'], stars: 4, gauntletBest: 4, seasons: [] });
+  });
+});
+
+describe('ghost lookup', () => {
+  it('finds active trainers near your trophies, never yourself', async () => {
+    const me = (await store.create('Me', 1000)).profile.id;
+    const near = (await store.create('Near', 1000)).profile.id;
+    await store.create('Never battled', 1000);
+    await store.recordMatch(ranked(near, me, 0));
+    const ghosts = await store.ghosts(30, me, 2000);
+    expect(ghosts.map((g) => g.id)).toEqual([near]);
+    expect(ghosts[0]).toMatchObject({ name: 'Near', deck: [...DEFAULT_DECK] });
+    // Long inactive trainers are skipped.
+    expect(await store.ghosts(30, me, 1000 + 60 * 86_400_000)).toEqual([]);
+  });
+});
+
+describe('score boards', () => {
+  it('keep each trainer’s best and rank them', async () => {
+    const a = (await store.create('A')).profile.id;
+    const b = (await store.create('B')).profile.id;
+    expect(await store.submitScore('daily', '2026-10-16', a, 'A', 1200, {}, 1)).toEqual({ best: 1200, rank: 1 });
+    expect(await store.submitScore('daily', '2026-10-16', b, 'B', 1500, {}, 2)).toEqual({ best: 1500, rank: 1 });
+    expect(await store.submitScore('daily', '2026-10-16', a, 'A', 900, {}, 3)).toEqual({ best: 1200, rank: 2 });
+    expect(await store.submitScore('daily', '2026-10-17', a, 'A', 10, {}, 4)).toEqual({ best: 10, rank: 1 });
+    const board = await store.scoreboard('daily', '2026-10-16');
+    expect(board).toEqual({ board: 'daily', period: '2026-10-16', total: 2, entries: [
+      { rank: 1, id: b, name: 'B', score: 1500 }, { rank: 2, id: a, name: 'A', score: 1200 },
+    ] });
+  });
+});
+
+describe('replays', () => {
+  it('are stored with the battle and flagged in history', async () => {
+    const a = (await store.create('A')).profile.id;
+    const replay = { v: 1, seed: 5, starters: [['bulbasaur', 'charmander'], ['squirtle', 'charmander']], decks: [[...DEFAULT_DECK], [...DEFAULT_DECK]], rules: {}, names: ['A', 'Bot'], plays: [], steps: 10, result: null } as never;
+    const { matchId } = await store.recordBattle({ mode: 'training', winner: 0, reason: 'crowns', sides: [{ profileId: a, name: 'A', crowns: 1 }, { profileId: null, name: 'Bot', crowns: 0 }], replay });
+    expect((await store.recentMatches(a))[0]).toMatchObject({ id: matchId, hasReplay: true, team: 0 });
+    expect(await store.replay(matchId)).toMatchObject({ id: matchId, mode: 'training', replay: { seed: 5 }, players: [{ team: 0, name: 'A', profileId: a }, { team: 1, name: 'Bot', profileId: null }] });
+    expect(await store.replay(999)).toBeNull();
+  });
+});
+
+describe('seasons', () => {
+  it('the first call only records the season; a new month archives final standings', async () => {
+    const top = (await store.create('Top')).profile.id;
+    const low = (await store.create('Low')).profile.id;
+    for (let i = 0; i < 3; i++) await store.recordMatch(ranked(top, low, 0));
+    const oct = Date.UTC(2026, 9, 16);
+    expect(await store.seasonRollover(oct)).toEqual({ rolled: false, season: '2026-10' });
+    expect(await store.seasonRollover(oct + 86_400_000)).toEqual({ rolled: false, season: '2026-10' });
+    const before = (await store.get(top))!.trophies;
+    const res = await store.seasonRollover(Date.UTC(2026, 10, 2));
+    expect(res).toMatchObject({ rolled: true, season: '2026-11', ended: '2026-10', trainers: 2 });
+    expect((await store.get(top))!.seasons).toEqual([{ season: '2026-10', trophies: before, rank: 1 }]);
+    expect((await store.get(low))!.seasons).toEqual([{ season: '2026-10', trophies: 0, rank: 2 }]);
+    expect((await store.get(top))!.trophies).toBe(before);
+    expect((await store.seasonRollover(Date.UTC(2026, 10, 3))).rolled).toBe(false);
+  });
+
+  it('leaves trophies as they are, even far above 1000', async () => {
+    const id = (await store.create('Pro')).profile.id;
+    await store['db'].call('cop_record_battle', {
+      p_mode: 'ranked', p_winner: 0, p_reason: 'crowns', p_replay: null, p_now: 1,
+      p_sides: [{ profileId: id, name: 'Pro', crowns: 1, trophiesBefore: 0, delta: 2000, apply: 'rated' }, { profileId: null, name: 'X', crowns: 0, trophiesBefore: 0, delta: 0, apply: 'none' }],
+    });
+    await store.seasonRollover(Date.UTC(2026, 9, 1));
+    await store.seasonRollover(Date.UTC(2026, 10, 1));
+    expect((await store.get(id))!.trophies).toBe(2000);
   });
 });

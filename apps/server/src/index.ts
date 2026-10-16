@@ -15,3 +15,15 @@ if (!url || !secretKey) {
 const store = new ProfileStore(supabaseRpc(url, secretKey));
 logger.info(`[store] profiles in Supabase at ${new URL(url).host}`);
 await createAppServer({ store }).listen(port);
+
+/** Monthly ladder seasons: the database rolls over at most once per month, so checking often is safe. */
+async function checkSeason() {
+  try {
+    const r = await store.seasonRollover();
+    if (r.rolled) logger.info(`[season] ${r.ended} ended for ${r.trainers} trainers; ${r.season} begins`);
+  } catch (err) {
+    logger.error('[season] rollover check failed:', err);
+  }
+}
+await checkSeason();
+setInterval(() => void checkSeason(), 60 * 60 * 1000).unref();

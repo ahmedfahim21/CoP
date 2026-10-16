@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mirror } from './arena.js';
-import { Bot, chooseBotPlay, seededRandom } from './bot.js';
+import { ACE_SKILL, ACE_TROPHIES, Bot, ROOKIE_SKILL, chooseBotPlay, seededRandom, skillForTrophies } from './bot.js';
 import { CARDS } from './cards.js';
 import { OVERTIME_SECONDS, REGULAR_SECONDS, createMatch, playCard, step, type MatchState } from './sim.js';
 import { DT, PICKS, keepUnits, spawn, started } from './testing.js';
@@ -82,5 +82,31 @@ describe('bot', () => {
     s.players[0].elixir = 10;
     const bot = new Bot(0, seededRandom(1));
     for (let i = 0; i < 100; i++) expect(bot.update(s, DT)).toBeNull();
+  });
+});
+
+describe('bot skill', () => {
+  it('scales from rookie at 0 trophies to ace at the top', () => {
+    expect(skillForTrophies(0)).toEqual(ROOKIE_SKILL);
+    expect(skillForTrophies(ACE_TROPHIES)).toEqual(ACE_SKILL);
+    expect(skillForTrophies(99999)).toEqual(ACE_SKILL);
+    const mid = skillForTrophies(ACE_TROPHIES / 2);
+    expect(mid.reaction).toBeLessThan(ROOKIE_SKILL.reaction);
+    expect(mid.reaction).toBeGreaterThan(ACE_SKILL.reaction);
+  });
+
+  it('the ace beats the rookie most of the time, and both only play legal cards', () => {
+    let aceWins = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const s = createMatch(PICKS, seed);
+      const aceTeam = (seed % 2) as 0 | 1;
+      const ace = new Bot(aceTeam, seededRandom(seed), ACE_SKILL);
+      const rookie = new Bot((1 - aceTeam) as 0 | 1, seededRandom(seed + 100), ROOKIE_SKILL);
+      const bots = aceTeam === 0 ? [ace, rookie] : [rookie, ace];
+      const { rejected } = playOut(s, [(m) => bots[0]!.update(m, DT), (m) => bots[1]!.update(m, DT)]);
+      expect(rejected).toBe(0);
+      if (s.result?.winner === aceTeam) aceWins++;
+    }
+    expect(aceWins).toBeGreaterThanOrEqual(6);
   });
 });

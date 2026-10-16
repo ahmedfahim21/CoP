@@ -1,5 +1,5 @@
-import { Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
-import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type TypeMatchup, type StarterPick } from '@cop/shared';
+import { Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Lock, MapIcon, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
+import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, unlockLevel, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type Team, type TypeMatchup, type StarterPick } from '@cop/shared';
 import { ALL_STARTERS, type Prefs } from '../prefs.js';
 import type { ProfileSession } from '../profile.js';
 import { createDiorama } from '../three/diorama.js';
@@ -7,13 +7,21 @@ import { trainerSpriteUrl } from '../config.js';
 import { cardEl, dropEl, starterArt } from './cards.js';
 import { h, icon } from './dom.js';
 import { ProfilePanel, RanksPanel, trophyPill } from './ladder.js';
+import { AdventurePanel, type AdventureHooks } from './adventure.js';
+import { levelBadge, lockCard, unlockHint } from './progress.js';
+import { api } from '../api.js';
 import { sound } from '../audio/sound.js';
 import { soundToggle } from './soundToggle.js';
-import { showCredits } from './credits.js';
+import { creditsButton } from './credits.js';
+import { LeaguePanel } from './league.js';
 
-export type Tab = 'cards' | 'towers' | 'battle' | 'ranks' | 'profile';
+export type Tab = 'cards' | 'adventure' | 'battle' | 'ranks' | 'profile';
 
-export interface HomeHooks {
+/** How often the Battle tab refreshes its online count. */
+const STATUS_POLL_MS = 15_000;
+
+export interface HomeHooks extends AdventureHooks {
+  onReplay(matchId: number, team: Team): void;
   onRanked(): void;
   onTraining(): void;
   onCreateRoom(): void;
@@ -33,6 +41,9 @@ export class Home {
   private readonly arenaName = h('span', {});
   private readonly arenaSub = h('small', {});
   private readonly battleSub = h('span', { class: 'sub' });
+  private readonly online = h('div', { class: 'online-count' });
+  private statusTimer = 0;
+  private cardsView: 'deck' | 'towers' = 'deck';
   private tab: Tab = 'battle';
   private activeSlot: 0 | 1 = 0;
   /** Re-render the loadout tabs, e.g. after the server profile replaces local prefs. */
@@ -42,15 +53,15 @@ export class Home {
     this.codeInput = h('input', { class: 'code-input', placeholder: 'Room code', value: initialCode, autocomplete: 'off', spellcheck: false, maxLength: 24 });
     this.ranks = new RanksPanel(profiles);
     this.panels = {
-      cards: this.buildCards(),
-      towers: this.buildTowers(),
+      cards: this.buildCardsTab(),
+      adventure: new AdventurePanel(profiles, hooks).el,
       battle: this.buildBattle(),
       ranks: this.ranks.el,
-      profile: new ProfilePanel(profiles).el,
+      profile: new ProfilePanel(profiles, hooks.onReplay).el,
     };
     const nav = h('nav', { class: 'nav' });
     const tabs: Array<[Tab, string, Parameters<typeof icon>[0]]> = [
-      ['cards', 'Cards', Layers], ['towers', 'Towers', Castle], ['battle', 'Battle', Swords], ['ranks', 'Ranks', Trophy], ['profile', 'Profile', User],
+      ['cards', 'Cards', Layers], ['adventure', 'Adventure', MapIcon], ['battle', 'Battle', Swords], ['ranks', 'Ranks', Trophy], ['profile', 'Profile', User],
     ];
     this.navButtons = {} as Record<Tab, HTMLButtonElement>;
     for (const [t, label, ic] of tabs) {
@@ -93,11 +104,18 @@ export class Home {
     this.errorEl.textContent = error ?? '';
     if (error) this.select('battle');
     this.mountDiorama();
+    this.pollStatus(this.tab === 'battle');
   }
 
   hide() {
     this.el.hidden = true;
     this.unmountDiorama();
+    this.pollStatus(false);
+  }
+
+  /** Jump to a tab (e.g. Adventure after a Daily Challenge, Battle after a League stage). */
+  open(tab: Tab) {
+    this.select(tab);
   }
 
   private select(tab: Tab) {
@@ -110,6 +128,24 @@ export class Home {
     if (tab === 'battle' && !this.el.hidden) this.mountDiorama();
     else this.unmountDiorama();
     if (tab === 'ranks') void this.ranks.load();
+    this.pollStatus(tab === 'battle' && !this.el.hidden);
+  }
+
+  /** "12 trainers online", refreshed while the Battle tab is showing. */
+  private pollStatus(on: boolean) {
+    clearInterval(this.statusTimer);
+    this.statusTimer = 0;
+    if (!on) return;
+    const load = () => api.status().then((st) => {
+      const others = Math.max(0, st.online);
+      this.online.replaceChildren(h('span', { class: 'online-dot' }),
+        h('span', { textContent: others === 0 ? 'Quiet right now: ghosts of real trainers fill in' : `${others} trainer${others === 1 ? '' : 's'} online · ${st.searching} searching` }));
+    }, (err: unknown) => {
+      console.warn('Status check failed', err);
+      this.online.replaceChildren();
+    });
+    void load();
+    this.statusTimer = window.setInterval(() => void load(), STATUS_POLL_MS);
   }
 
   private mountDiorama() {
@@ -128,6 +164,7 @@ export class Home {
     const name = h('div', { class: 'plate-name', textContent: this.prefs.name });
     const sub = h('div', { class: 'plate-sub' });
     const trophies = h('div', {});
+    const level = h('div', {});
     const edit = h('button', { class: 'name-edit', attrs: { 'aria-label': 'Edit trainer name' } }, icon(Pencil));
     const textCol = h('div', { attrs: { style: 'min-width:0;flex:1' } }, name, sub);
     const show = () => {
@@ -136,6 +173,7 @@ export class Home {
       if (!edit.hidden) name.textContent = this.prefs.name;
       sub.textContent = p ? `${arenaFor(p.trophies).name}${p.rank ? ` · #${p.rank}` : ''}` : this.profiles.status === 'offline' ? 'Offline' : 'Kanto League';
       trophies.replaceChildren(trophyPill(p?.trophies ?? 0));
+      level.replaceChildren(p ? levelBadge(this.profiles.level.level) : '');
     };
     this.profiles.onChange(show);
     show();
@@ -161,9 +199,10 @@ export class Home {
       input.select();
     });
     return h('header', { class: 'topbar' },
-      h('div', { class: 'profile' }, avatar('red'), textCol, edit),
+      h('div', { class: 'profile' }, h('div', { class: 'avatar-wrap' }, avatar('red'), level), textCol, edit),
       trophies,
       soundToggle().el,
+      creditsButton(),
     );
   }
 
@@ -188,11 +227,13 @@ export class Home {
     return h('div', { class: 'tab-panel' },
       h('div', { class: 'arena-showcase' }, this.dioramaHost, h('div', { class: 'arena-label stroke' }, this.arenaName, this.arenaSub)),
       battle,
+      this.online,
+      new LeaguePanel(this.profiles, (stage) => this.hooks.onLeague(stage)).el,
       h('div', { class: 'panel' },
         h('div', { class: 'row training-row' },
           h('div', { class: 'grow' },
             h('div', { class: 'panel-title stroke' }, icon(Dumbbell), 'Training camp'),
-            h('div', { class: 'hint left', textContent: 'Practice against a bot. No trophies at stake.' })),
+            h('div', { class: 'hint left', textContent: 'Practice against a bot as strong as your trophies. No trophies at stake.' })),
           train),
       ),
       h('div', { class: 'panel' },
@@ -203,16 +244,39 @@ export class Home {
     );
   }
 
-  // --- Cards tab ---
+  // --- Cards tab: the deck and the tower Pokémon ---
+
+  private buildCardsTab(): HTMLDivElement {
+    const deck = this.buildCards();
+    const towers = this.buildTowers();
+    const seg = h('div', { class: 'segmented', attrs: { role: 'tablist' } });
+    const views: Array<['deck' | 'towers', string, IconData]> = [['deck', 'Deck', Layers], ['towers', 'Towers', Castle]];
+    const show = () => {
+      deck.hidden = this.cardsView !== 'deck';
+      towers.hidden = this.cardsView !== 'towers';
+      for (const b of seg.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === this.cardsView));
+    };
+    for (const [view, label, ic] of views) {
+      const b = h('button', { class: 'seg-btn', data: { view }, attrs: { role: 'tab' } }, icon(ic), label);
+      b.addEventListener('click', () => {
+        this.cardsView = view;
+        show();
+      });
+      seg.append(b);
+    }
+    show();
+    return h('div', { class: 'tab-panel' }, seg, deck, towers);
+  }
 
   private buildCards(): HTMLDivElement {
-    const panel = h('div', { class: 'tab-panel' });
+    const panel = h('div', { class: 'sub-panel' });
     /** A collection card picked with "Use", waiting for the deck slot it replaces. */
     let pending: CardId | null = null;
     const render = () => {
       const deck = this.prefs.deck;
-      /** Cards outside the deck get a "Use" button in their detail screen. */
-      const useFor = (id: CardId) => (deck.includes(id) ? null : () => {
+      const owned = this.profiles.unlocked;
+      /** Unlocked cards outside the deck get a "Use" button in their detail screen. */
+      const useFor = (id: CardId) => (deck.includes(id) || !owned.has(id) ? null : () => {
         pending = id;
         render();
       });
@@ -232,12 +296,14 @@ export class Home {
         });
         grid.append(c);
       }
-      const rest = CARD_IDS.filter((id) => !deck.includes(id));
+      // Owned cards first, then the locked ones in the order they unlock.
+      const rest = CARD_IDS.filter((id) => !deck.includes(id)).sort((a, b) => unlockOrder(a, owned) - unlockOrder(b, owned));
       const collection = h('div', { class: 'deck-grid' });
       for (const id of rest) {
         const c = cardEl(id, { count: true });
         if (pending === id) c.classList.add('picked');
-        c.addEventListener('click', () => showCardDetail(id, useFor));
+        if (!owned.has(id)) lockCard(c, id);
+        c.addEventListener('click', () => showCardDetail(id, useFor, owned.has(id)));
         collection.append(c);
       }
       const cancel = h('button', { class: 'btn small' }, 'Cancel');
@@ -247,21 +313,31 @@ export class Home {
       });
       const parts: Array<HTMLElement | null> = [
         h('div', { class: 'deck-head' },
-          h('div', { class: 'deck-title' }, h('h2', { textContent: 'Battle Deck' }), creditsButton()),
+          h('h2', { textContent: 'Battle Deck' }),
           h('div', { class: 'avg stroke' }, dropEl(avg.toFixed(1)), 'Avg. elixir')),
         pending
           ? h('div', { class: 'swap-banner' }, cardEl(pending), h('div', { class: 'stroke', textContent: `Tap a card in your deck to swap in ${CARDS[pending].name}` }), cancel)
           : null,
         grid,
-        h('div', { class: 'collection-head' }, h('h2', { textContent: 'Card Collection' }), h('div', { class: 'found stroke', textContent: `Found: ${CARD_IDS.length}/${CARD_IDS.length}` })),
+        h('div', { class: 'collection-head' }, h('h2', { textContent: 'Card Collection' }), h('div', { class: 'found stroke', textContent: `Found: ${owned.size}/${CARD_IDS.length}` })),
         collection,
-        h('div', { class: 'hint', textContent: 'Tap a card for its stats and speciality.' }),
+        h('div', { class: 'hint', textContent: owned.size < CARD_IDS.length
+          ? 'Tap a card for its stats. Locked cards unlock as you level up, or sooner by beating the League.'
+          : 'Tap a card for its stats and speciality.' }),
       ];
       panel.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
     };
     render();
     this.rerender.push(() => {
       pending = null;
+      render();
+    });
+    // Unlocks arrive with the profile (after battles, puzzles and level-ups).
+    let ownedKey = '';
+    this.profiles.onChange(() => {
+      const key = [...this.profiles.unlocked].sort().join();
+      if (key === ownedKey) return;
+      ownedKey = key;
       render();
     });
     return panel;
@@ -297,7 +373,7 @@ export class Home {
     };
     render();
     this.rerender.push(render);
-    return h('div', { class: 'tab-panel' },
+    return h('div', { class: 'sub-panel' },
       h('h2', { textContent: 'Tower Pokémon' }),
       h('div', { class: 'hint', textContent: 'Your starters guard your side towers and attack with their typed moves.' }),
       slots,
@@ -348,7 +424,7 @@ const times = (m: number) => `×${m}`;
  * and how it fares against each starter tower. `useFor` decides whether a card gets a
  * "Use" button (cards outside the deck).
  */
-function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null) {
+function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null, owned = true) {
   const def = CARDS[id];
   const s = def.stats;
   const info = cardInfo(id);
@@ -401,6 +477,7 @@ function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null)
         h('div', { class: 'tower-mults' },
           h('span', { class: `mult ${tone(t.dealt)}`, textContent: `deals ${times(t.dealt)}` }),
           h('span', { class: `mult ${tone(1 / t.taken)}`, textContent: `takes ${times(t.taken)}` }))))),
+      owned ? null : h('div', { class: 'locked-note' }, icon(Lock), h('span', { textContent: unlockHint(id) })),
       h('div', { class: 'row modal-actions' }, close, use),
     ),
   );
@@ -419,9 +496,7 @@ function showCardDetail(id: CardId, useFor: (id: CardId) => (() => void) | null)
 /** Good for this card above 1, bad below. */
 const tone = (m: number) => (m > 1 ? 'good' : m < 1 ? 'bad' : 'plain');
 
-/** The ⓘ beside the deck title: opens the credits. */
-function creditsButton(): HTMLButtonElement {
-  const b = h('button', { class: 'info-btn', attrs: { 'aria-label': 'Credits' } }, icon(Info));
-  b.addEventListener('click', showCredits);
-  return b;
+/** Collection order: owned cards (0), then locked ones by the level that opens them. */
+function unlockOrder(id: CardId, owned: Set<CardId>): number {
+  return owned.has(id) ? 0 : unlockLevel(id) ?? 99;
 }

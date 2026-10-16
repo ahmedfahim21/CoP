@@ -5,6 +5,8 @@ import {
   Medal01Icon, Moon02Icon, MountainIcon, PencilEdit01Icon, RefreshIcon, Robot01Icon, Shield01Icon, ShovelIcon,
   SnowIcon, SparklesIcon, StoneIcon, SwordsIcon, Target01Icon, Timer01Icon, TrophyIcon, UserGroupIcon, UserIcon,
   ZapIcon, DropletIcon, ArrowUp02Icon, VolumeHighIcon, VolumeOffIcon, BiohazardIcon, Alert01Icon, Tick02Icon, InformationCircleIcon,
+  StarIcon, SquareLock02Icon, PlayIcon, PauseIcon, PreviousIcon, Link01Icon, Share08Icon, PuzzleIcon, Calendar03Icon, Route01Icon, Forward01Icon,
+  RotateLeft01Icon, Award01Icon, Flag01Icon, VideoReplayIcon, MapsIcon, GiftIcon,
 } from '@hugeicons/core-free-icons';
 
 /**
@@ -74,4 +76,7 @@ export {
   PencilEdit01Icon as Pencil, RefreshIcon as Refresh, Robot01Icon as Bot, Shield01Icon as Shield, SparklesIcon as Sparkles,
   SwordsIcon as Swords, Target01Icon as Target, Tick02Icon as Tick, Timer01Icon as Timer, TrophyIcon as Trophy,
   UserGroupIcon as Users, UserIcon as User, VolumeHighIcon as VolumeOn, VolumeOffIcon as VolumeOff, ZapIcon as Zap,
+  StarIcon as Star, SquareLock02Icon as Lock, PlayIcon as Play, PauseIcon as Pause, PreviousIcon as ToStart, Link01Icon as Link, Share08Icon as Share, PuzzleIcon as Puzzle,
+  Calendar03Icon as Calendar, Route01Icon as Route, Forward01Icon as FastForward, RotateLeft01Icon as Restart, Award01Icon as Award,
+  Flag01Icon as Flag, VideoReplayIcon as Replay, MapsIcon as MapIcon, GiftIcon as Gift, GhostIcon as Ghost,
 };
