@@ -30,11 +30,11 @@ describe('trophies', () => {
 describe('arenas', () => {
   it('maps trophies to the highest arena reached', () => {
     expect(arenaFor(0).name).toBe('Pallet Town');
-    expect(arenaFor(299).index).toBe(1);
-    expect(arenaFor(300).index).toBe(2);
+    expect(arenaFor(99).index).toBe(1);
+    expect(arenaFor(100).index).toBe(2);
     expect(arenaFor(99999).name).toBe('Indigo Plateau');
-    expect(nextArena(0)!.minTrophies).toBe(300);
-    expect(nextArena(4000)).toBeNull();
+    expect(nextArena(0)!.minTrophies).toBe(100);
+    expect(nextArena(1600)).toBeNull();
     expect(ARENAS.map((a) => a.minTrophies)).toEqual([...ARENAS.map((a) => a.minTrophies)].sort((a, b) => a - b));
   });
 });

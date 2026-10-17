@@ -36,17 +36,18 @@ export interface Arena {
   minTrophies: number;
 }
 
+/** A new arena every few net wins early on (an even win is +30); the top one is ~50 net wins up. */
 export const ARENAS: readonly Arena[] = [
   { index: 1, name: 'Pallet Town', minTrophies: 0 },
-  { index: 2, name: 'Viridian Forest', minTrophies: 300 },
-  { index: 3, name: 'Pewter Gym', minTrophies: 600 },
-  { index: 4, name: 'Cerulean Cape', minTrophies: 1000 },
-  { index: 5, name: 'Vermilion Docks', minTrophies: 1400 },
-  { index: 6, name: 'Celadon Rooftop', minTrophies: 1800 },
-  { index: 7, name: 'Fuchsia Safari', minTrophies: 2300 },
-  { index: 8, name: 'Saffron Dojo', minTrophies: 2800 },
-  { index: 9, name: 'Cinnabar Volcano', minTrophies: 3400 },
-  { index: 10, name: 'Indigo Plateau', minTrophies: 4000 },
+  { index: 2, name: 'Viridian Forest', minTrophies: 100 },
+  { index: 3, name: 'Pewter Gym', minTrophies: 200 },
+  { index: 4, name: 'Cerulean Cape', minTrophies: 350 },
+  { index: 5, name: 'Vermilion Docks', minTrophies: 500 },
+  { index: 6, name: 'Celadon Rooftop', minTrophies: 700 },
+  { index: 7, name: 'Fuchsia Safari', minTrophies: 900 },
+  { index: 8, name: 'Saffron Dojo', minTrophies: 1100 },
+  { index: 9, name: 'Cinnabar Volcano', minTrophies: 1350 },
+  { index: 10, name: 'Indigo Plateau', minTrophies: 1600 },
 ];
 
 export function arenaFor(trophies: number): Arena {
