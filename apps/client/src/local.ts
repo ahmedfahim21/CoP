@@ -16,6 +16,7 @@ interface LocalState {
   title: string;
   twist: string;
   regularSeconds: number;
+  arena: number;
   entities: Map<string, EntityLike>;
   projectiles: Map<string, ProjectileLike>;
   players: Map<string, PlayerLike>;
@@ -63,7 +64,7 @@ export class LocalBattle implements BattleSession {
       });
     }
     this.state = {
-      phase: match.phase, timeLeft: match.timeLeft, doubleElixir: false, mode: 'puzzle', title: opts.title ?? '', twist: opts.twist ?? '',
+      phase: match.phase, timeLeft: match.timeLeft, doubleElixir: false, mode: 'puzzle', title: opts.title ?? '', twist: opts.twist ?? '', arena: 0,
       regularSeconds: Math.round(opts.clock ? opts.clock(match, 0) : match.rules.regularSeconds),
       entities: new Map<string, EntityLike>(), projectiles: new Map<string, ProjectileLike>(), players: this.players,
     };

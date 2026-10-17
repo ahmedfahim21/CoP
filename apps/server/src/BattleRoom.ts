@@ -118,7 +118,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
 
   maxClients = 2;
   state = new BattleState({
-    phase: 'waiting', timeLeft: 0, doubleElixir: false, winner: -1, resultReason: '', mode: 'casual', title: '', twist: '', regularSeconds: 0,
+    phase: 'waiting', timeLeft: 0, doubleElixir: false, winner: -1, resultReason: '', mode: 'casual', title: '', twist: '', regularSeconds: 0, arena: 0,
   });
 
   private plan!: Plan;
@@ -147,6 +147,7 @@ export class BattleRoom extends Room<{ state: BattleState }> {
     this.state.mode = this.plan.mode;
     this.state.title = this.plan.title;
     this.state.twist = this.plan.twist;
+    this.state.arena = this.plan.stage?.arena ?? 0;
     this.state.regularSeconds = this.plan.rules.regularSeconds;
     if (SOLO_MODES.includes(this.plan.mode)) this.maxClients = 1;
     // Only casual rooms are open to quick join; everything else is reached by id or reservation.
