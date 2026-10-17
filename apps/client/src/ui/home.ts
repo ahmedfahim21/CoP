@@ -1,8 +1,9 @@
-import { Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Lock, MapIcon, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
-import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, arenaFor, cardInfo, unlockLevel, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type Team, type TypeMatchup, type StarterPick } from '@cop/shared';
+import { ChevronLeft, ChevronRight, Castle, Crosshair, Dumbbell, Footprints, Heart, Info, Layers, Lock, MapIcon, Pencil, Sparkles, Swords, Target, Timer, Trophy, TYPE_ICONS, User, Users, Zap, type IconData } from './icons.js';
+import { CARDS, CARD_IDS, ROLE_NAMES, STARTERS, ARENAS, arenaFor, cardInfo, unlockLevel, TRAINER_NAME_MAX, type CardId, type PokeType, type StarterId, type Team, type TypeMatchup, type StarterPick } from '@cop/shared';
 import { ALL_STARTERS, type Prefs } from '../prefs.js';
 import type { ProfileSession } from '../profile.js';
-import { createDiorama } from '../three/diorama.js';
+import { createDiorama, type Diorama } from '../three/diorama.js';
+import { themeForArena } from '../three/themes.js';
 import { trainerSpriteUrl } from '../config.js';
 import { cardEl, dropEl, starterArt } from './cards.js';
 import { h, icon } from './dom.js';
@@ -36,10 +37,17 @@ export class Home {
   private readonly errorEl = h('div', { class: 'error-text' });
   private readonly codeInput: HTMLInputElement;
   private readonly ranks: RanksPanel;
-  private diorama: { dispose(): void } | null = null;
+  private diorama: Diorama | null = null;
   private dioramaHost = h('div', { class: 'stage-host' });
   private readonly arenaName = h('span', {});
   private readonly arenaSub = h('small', {});
+  private readonly showcase = h('div', { class: 'arena-showcase' });
+  private readonly arenaLock = h('div', { class: 'arena-lock' });
+  private readonly arenaPrev = h('button', { class: 'arena-nav prev', attrs: { 'aria-label': 'Previous arena' } }, icon(ChevronLeft));
+  private readonly arenaNext = h('button', { class: 'arena-nav next', attrs: { 'aria-label': 'Next arena' } }, icon(ChevronRight));
+  private readonly arenaDots = h('div', { class: 'arena-dots' });
+  /** The arena the slider shows; null follows your own. */
+  private viewedArena: number | null = null;
   private readonly battleSub = h('span', { class: 'sub' });
   private readonly online = h('div', { class: 'online-count' });
   private statusTimer = 0;
@@ -93,9 +101,18 @@ export class Home {
 
   private showArena() {
     const p = this.profiles.profile;
-    const arena = arenaFor(p?.trophies ?? 0);
+    const own = arenaFor(p?.trophies ?? 0).index;
+    const index = this.viewedArena ?? own;
+    const arena = ARENAS[index - 1]!;
+    const locked = index > own;
     this.arenaName.textContent = `Arena ${arena.index}`;
-    this.arenaSub.textContent = arena.name;
+    this.arenaSub.textContent = locked ? `${arena.name} · locked` : arena.name;
+    this.showcase.classList.toggle('locked', locked);
+    this.arenaLock.replaceChildren(...(locked ? [icon(Lock), h('span', { textContent: `Unlocks at ${arena.minTrophies.toLocaleString()} trophies` })] : []));
+    this.arenaPrev.disabled = index <= 1;
+    this.arenaNext.disabled = index >= ARENAS.length;
+    this.arenaDots.replaceChildren(...ARENAS.map((a) => h('span', { class: `dot${a.index === index ? ' on' : ''}${a.index > own ? ' locked' : ''}` })));
+    this.diorama?.setTheme(themeForArena(index));
     this.battleSub.textContent = this.profiles.status === 'offline' ? 'Ranked · offline, tap to retry' : 'Ranked · 1v1';
   }
 
@@ -103,6 +120,11 @@ export class Home {
     this.el.hidden = false;
     this.errorEl.textContent = error ?? '';
     if (error) this.select('battle');
+    // Back from a battle: the slider returns to your own arena.
+    if (this.viewedArena !== null) {
+      this.viewedArena = null;
+      this.showArena();
+    }
     this.mountDiorama();
     this.pollStatus(this.tab === 'battle');
   }
@@ -150,7 +172,39 @@ export class Home {
 
   private mountDiorama() {
     if (this.diorama || this.tab !== 'battle') return;
-    this.diorama = createDiorama(this.dioramaHost, this.prefs.starters);
+    const own = arenaFor(this.profiles.profile?.trophies ?? 0).index;
+    this.diorama = createDiorama(this.dioramaHost, this.prefs.starters, themeForArena(this.viewedArena ?? own));
+  }
+
+  /** Steps the arena slider; you can look at every arena, the ones above yours show as locked. */
+  private slideArena(step: -1 | 1) {
+    const own = arenaFor(this.profiles.profile?.trophies ?? 0).index;
+    const next = Math.min(ARENAS.length, Math.max(1, (this.viewedArena ?? own) + step));
+    this.viewedArena = next === own ? null : next;
+    this.showArena();
+  }
+
+  private buildShowcase(): HTMLDivElement {
+    this.arenaPrev.addEventListener('click', () => this.slideArena(-1));
+    this.arenaNext.addEventListener('click', () => this.slideArena(1));
+    // Swipe sideways on the arena to slide.
+    let start: { x: number; y: number; id: number } | null = null;
+    this.showcase.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    });
+    const end = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      start = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) this.slideArena(dx < 0 ? 1 : -1);
+    };
+    this.showcase.addEventListener('pointerup', end);
+    this.showcase.addEventListener('pointercancel', () => { start = null; });
+    this.showcase.append(this.dioramaHost, this.arenaLock, this.arenaPrev, this.arenaNext, this.arenaDots,
+      h('div', { class: 'arena-label stroke' }, this.arenaName, this.arenaSub));
+    return this.showcase;
   }
 
   private unmountDiorama() {
@@ -225,7 +279,7 @@ export class Home {
     updateJoin();
 
     return h('div', { class: 'tab-panel' },
-      h('div', { class: 'arena-showcase' }, this.dioramaHost, h('div', { class: 'arena-label stroke' }, this.arenaName, this.arenaSub)),
+      this.buildShowcase(),
       battle,
       this.online,
       new LeaguePanel(this.profiles, (stage) => this.hooks.onLeague(stage)).el,
