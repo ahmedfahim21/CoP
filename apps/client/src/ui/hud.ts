@@ -2,6 +2,7 @@ import { Crown, Trophy } from './icons.js';
 import { CARDS, ELIXIR_MAX, rulesFor, type CardId, type ErrorMessage, type HandMessage, type MatchMode, type Point, type Team } from '@cop/shared';
 import type { BattleSession } from '../net.js';
 import { BattleView, type BarInfo } from '../three/battle.js';
+import { themeForTrophies } from '../three/themes.js';
 import { cardEl, setCard } from './cards.js';
 import { h, icon } from './dom.js';
 import { avatar } from './home.js';
@@ -84,10 +85,13 @@ export class BattleHud {
     this.renderCrowns(this.myCrowns, 0, 'mine', false);
     document.body.append(this.el);
 
+    // The battle is fought in the higher-ranked player's arena.
+    let top = 0;
+    session.state.players.forEach((p) => { top = Math.max(top, p.trophies); });
     this.view = new BattleView(this.stageHost, session, {
       onBars: (bars) => this.updateBars(bars),
       onText: (text, x, y, tone) => this.floatText(text, x, y, tone),
-    });
+    }, undefined, themeForTrophies(top));
     this.unsubs.push(this.mute.dispose);
     this.unsubs.push(session.on('hand', (m) => this.setHand(m)));
     this.unsubs.push(session.on('error', (m) => {

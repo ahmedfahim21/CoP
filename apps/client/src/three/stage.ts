@@ -24,6 +24,7 @@ export class Stage {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly sun: THREE.DirectionalLight;
+  private readonly hemi: THREE.HemisphereLight;
   private readonly frameFns = new Set<FrameFn>();
   private readonly timer = new THREE.Timer();
   private readonly raycaster = new THREE.Raycaster();
@@ -55,8 +56,8 @@ export class Stage {
 
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.5, 200);
 
-    const hemi = new THREE.HemisphereLight(0xdff1ff, 0x5d7a3a, 1.35);
-    this.scene.add(hemi);
+    this.hemi = new THREE.HemisphereLight(0xdff1ff, 0x5d7a3a, 1.35);
+    this.scene.add(this.hemi);
     // Sun upper-left and slightly behind the near side, so towers throw shadows down-right.
     this.sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
     this.sun.position.set(-10, 26, 12);
@@ -125,6 +126,13 @@ export class Stage {
       y: ((1 - v.y) / 2) * this.host.clientHeight,
       visible: v.z < 1,
     };
+  }
+
+  /** The arena's sky (background and far fog) and the colour light bounces up from the ground. */
+  setSky(sky: number, bounce: number) {
+    (this.scene.background as THREE.Color).setHex(sky);
+    this.scene.fog!.color.setHex(sky);
+    this.hemi.groundColor.setHex(bounce);
   }
 
   private resize() {
