@@ -40,6 +40,7 @@ import { teamColor } from './palette.js';
 import { buildRig } from './rigs/registry.js';
 import { restPose, type Rig } from './rigs/pose.js';
 import { Stage } from './stage.js';
+import { THEMES, type ArenaTheme } from './themes.js';
 import { ProjectileView, TowerView, UNIT_VISUAL_SCALE, UnitView, type FrameCtx } from './views.js';
 
 export interface BarInfo {
@@ -89,12 +90,13 @@ export class BattleView {
   private readonly lastText = new Map<string, number>();
   private readonly unsubs: Array<() => void> = [];
 
-  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks, zoom?: number) {
+  constructor(host: HTMLElement, private readonly session: BattleSource, private readonly hooks: BattleHooks, zoom?: number, theme: ArenaTheme = THEMES.pallet) {
     const team = session.team;
     if (team === undefined) throw new Error('BattleView created before the player has a team');
     this.team = team;
     this.stage = new Stage(host, { team, framing: 'battle', shadows: true, zoom });
-    this.arena = buildArena();
+    this.arena = buildArena(theme);
+    this.stage.setSky(theme.sky, theme.bounce);
     this.stage.scene.add(this.arena.group, this.fx.group);
 
     this.zone = new THREE.Group();

@@ -154,6 +154,20 @@ h1, h2 { margin: 0; }
 .arena-showcase .stage-host { position: absolute; inset: 0; }
 .arena-label { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: var(--primary); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 3px 14px 4px; font-size: 18px; white-space: nowrap; }
 .arena-label small { display: block; font-family: var(--sans); font-size: 12px; text-align: center; }
+/* The arena slider: arrows, dots, and a lock chip on arenas above your own (shown in full colour). */
+.arena-lock { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); font-size: 13px; white-space: nowrap; pointer-events: none; }
+.arena-showcase.locked .arena-lock { display: flex; }
+.arena-lock svg { width: 16px; height: 16px; }
+.arena-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; padding: 0; display: grid; place-items: center; background: var(--card); border: 2px solid var(--ink); box-shadow: var(--shadow); cursor: pointer; }
+.arena-nav:active { transform: translate(2px, calc(-50% + 2px)); box-shadow: var(--shadow-xs); }
+.arena-nav:disabled { visibility: hidden; }
+.arena-nav.prev { left: 10px; }
+.arena-nav.next { right: 10px; }
+.arena-nav svg { width: 20px; height: 20px; }
+.arena-dots { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; pointer-events: none; }
+.arena-dots .dot { width: 9px; height: 9px; background: var(--card); border: 2px solid var(--ink); }
+.arena-dots .dot.locked { background: var(--muted-bg); }
+.arena-dots .dot.on { background: var(--primary); transform: scale(1.25); }
 .panel { background: var(--card); border: 2px solid var(--ink); padding: 12px; box-shadow: var(--shadow-md); }
 .panel-title { font-size: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .panel-title svg { width: 18px; height: 18px; }

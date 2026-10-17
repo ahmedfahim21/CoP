@@ -1,6 +1,7 @@
 // README screenshots, taken from the running game (`pnpm dev`) with headless Chrome over the
-// DevTools protocol: title, home, deck builder, a card's details and a live training battle,
-// as a phone sees them. Writes docs/screenshots/*.webp.
+// DevTools protocol: title, home, deck builder, a card's details and a live gym battle,
+// as a phone sees them, plus a few arenas from the Battle tab's slider. Writes
+// docs/screenshots/*.webp.
 //
 //   pnpm screenshots                     (APP_URL=http://localhost:5173 by default)
 //   STORAGE=path/to/storage.json pnpm screenshots
@@ -80,8 +81,8 @@ try {
   };
   /** Centre of an element, in CSS pixels. */
   const centre = (selector) => js(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
-  const shot = async (name) => {
-    const { data } = await send('Page.captureScreenshot', { format: 'webp', quality: 90 });
+  const shot = async (name, clip) => {
+    const { data } = await send('Page.captureScreenshot', { format: 'webp', quality: 90, ...(clip ? { clip: { ...clip, scale: 1 } } : {}) });
     writeFileSync(join(out, `${name}.webp`), Buffer.from(data, 'base64'));
     console.log(`docs/screenshots/${name}.webp`);
   };
@@ -99,11 +100,31 @@ try {
   await sleep(1500);
   await shot('title');
 
-  // Home: the battle tab over the arena diorama.
+  // Home: the battle tab over the arena diorama. A new trainer is asked for a name first.
   await js(`document.querySelector('.boot-play').click()`);
   await waitFor(`!document.querySelector('.boot')`);
+  if (await js(`!!document.querySelector('.intro')`)) {
+    await js(`document.querySelector('.intro-chip').click(); document.querySelector('.intro-go').click()`);
+    await waitFor(`!document.querySelector('.intro')`);
+  }
   await sleep(2500);
   await shot('home');
+
+  // Arenas: slide to a few, cropped to the arena, without the slider's controls. The screenshot
+  // trainer is new, so everything past Pallet Town says "locked"; that's left off the label.
+  await js(`document.head.append(Object.assign(document.createElement('style'), { id: 'shots', textContent: '.arena-lock, .arena-nav, .arena-dots { display: none !important; }' }))`);
+  for (const [index, id] of [[2, 'viridian'], [4, 'cerulean'], [8, 'saffron'], [9, 'cinnabar'], [10, 'indigo']]) {
+    await js(`(() => {
+      const at = () => [...document.querySelectorAll('.arena-dots .dot')].findIndex((d) => d.classList.contains('on')) + 1;
+      while (at() < ${index}) document.querySelector('.arena-nav.next').click();
+      while (at() > ${index}) document.querySelector('.arena-nav.prev').click();
+    })()`);
+    await sleep(2200);
+    await js(`(() => { const s = document.querySelector('.arena-label small'); s.textContent = s.textContent.replace(' · locked', ''); })()`);
+    const box = await js(`(() => { const r = document.querySelector('.arena-showcase').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+    await shot(`arena-${id}`, box);
+  }
+  await js(`document.getElementById('shots').remove()`);
 
   // The deck builder, then a card's details.
   await js(`[...document.querySelectorAll('.nav-tab')].find((b) => b.textContent.includes('Cards')).click()`);
@@ -114,10 +135,11 @@ try {
   await shot('card');
   await js(`document.querySelector('.modal-backdrop').click()`);
 
-  // A training battle: play a few cards with real taps, then let the fight develop.
+  // A gym battle (Brock, in Pewter Gym's arena): play a few cards with real taps, then let
+  // the fight develop.
   await js(`[...document.querySelectorAll('.nav-tab')].find((b) => b.textContent.includes('Battle')).click()`);
-  await sleep(600);
-  await js(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Train').click()`);
+  await waitFor(`document.querySelector('.panel.league .btn.gold') && !document.querySelector('.panel.league .btn.gold').disabled`);
+  await js(`document.querySelector('.panel.league .btn.gold').click()`);
   await waitFor(`document.querySelector('#battle .hand .card')`, 30000);
   await sleep(4500); // countdown
   const stage = await js(`(() => { const r = document.querySelector('#battle .stage-host').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })()`);

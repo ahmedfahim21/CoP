@@ -49,6 +49,8 @@ export interface BattleSession extends BattleSource {
     title: string;
     twist: string;
     regularSeconds: number;
+    /** Ladder arena the mode puts the battle in (a League stage's); 0 = the higher-ranked player's. */
+    arena: number;
     players: MapLike<PlayerLike> & { get(key: string): PlayerLike | undefined };
   };
   on(event: 'hand', fn: (m: HandMessage) => void): () => void;

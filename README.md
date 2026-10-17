@@ -9,14 +9,21 @@ Clash Royale–style Pokémon battles, live in your browser. Your king tower is 
 <p align="center">
   <img src="docs/screenshots/title.webp" alt="Title screen" width="150">
   <img src="docs/screenshots/home.webp" alt="Home" width="150">
-  <img src="docs/screenshots/battle.webp" alt="Battle" width="150">
+  <img src="docs/screenshots/battle.webp" alt="Gym battle against Brock in Pewter Gym" width="150">
   <img src="docs/screenshots/deck.webp" alt="Deck builder" width="150">
   <img src="docs/screenshots/card.webp" alt="Card details" width="150">
+</p>
+<p align="center">
+  <img src="docs/screenshots/arena-viridian.webp" alt="Viridian Forest arena" width="150">
+  <img src="docs/screenshots/arena-cerulean.webp" alt="Cerulean Cape arena" width="150">
+  <img src="docs/screenshots/arena-saffron.webp" alt="Saffron Dojo arena" width="150">
+  <img src="docs/screenshots/arena-cinnabar.webp" alt="Cinnabar Volcano arena" width="150">
+  <img src="docs/screenshots/arena-indigo.webp" alt="Indigo Plateau arena" width="150">
 </p>
 
 ## Features
 
-- **Real-time multiplayer**: a ranked ladder with trophies across ten Kanto arenas, friendly rooms by invite code, and a training bot.
+- **Real-time multiplayer**: a ranked ladder with trophies across ten Kanto arenas, each with its own look (forest, rock gym, beach, harbour, rooftop, safari, dojo, volcano, stadium), friendly rooms by invite code, and a training bot.
 - **Ghost battles**: when nobody else is searching, the queue matches you against a real trainer's deck, played by a bot that fights at their trophy level. Ghosts move trophies at half rate.
 - **Kanto League** (on the Battle tab): 8 gyms, the Elite Four and Champion Blue, each with its own deck and twist. Earn up to 3 stars per stage.
 - **Adventure**: the rest of single player.
@@ -111,7 +118,8 @@ While `pnpm dev` runs, `/sandbox.html` stages scripted fights for tuning animati
 | Cards | New trainers start with 15 of the 27 cards. The rest unlock in small batches at trainer levels 2 to 6 (legendaries last), and League first clears open some early. |
 | Quests | Three a day (UTC), drawn from your profile ID and the date, so they're the same on every device. |
 | Stars | 1 for beating a stage, 1 more for losing no tower, 1 more for three crowns. |
-| Seasons | Monthly. Trophies above 1,000 are halved and top finishes are kept on the profile. |
+| Arenas | Ten, from Pallet Town (0 trophies) to the Indigo Plateau (1,600). A League stage is fought in its gym's arena (the Elite Four and Champion on the Indigo Plateau); any other battle in the higher-ranked player's. |
+| Seasons | Monthly. Trophies carry over; each trainer's final trophies and rank are kept on the profile. |
 
 Battles played against a server are scored on the server. Puzzles run on the client and only claim their one-time XP.
 

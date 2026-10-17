@@ -1,19 +1,34 @@
 import * as THREE from 'three';
 import { STARTER_IDS, type StarterPick } from '@cop/shared';
-import { buildArena, towerScenePositions } from './arena.js';
+import { buildArena, towerScenePositions, type Arena } from './arena.js';
 import { Fx } from './fx.js';
 import { Stage } from './stage.js';
+import type { ArenaTheme } from './themes.js';
 import { TowerView, type FrameCtx } from './views.js';
+
+export interface Diorama {
+  /** Swaps the arena under the towers (the home screen's arena slider). */
+  setTheme(theme: ArenaTheme): void;
+  dispose(): void;
+}
 
 /**
  * The menu's arena showcase: the real arena and towers with your starters on your side,
  * idling under a slowly swaying camera.
  */
-export function createDiorama(host: HTMLElement, starters: StarterPick): { dispose(): void } {
+export function createDiorama(host: HTMLElement, starters: StarterPick, theme: ArenaTheme): Diorama {
   const stage = new Stage(host, { team: 0, framing: 'diorama', shadows: true });
-  const arena = buildArena();
+  let arena: Arena | null = null;
+  const setTheme = (t: ArenaTheme) => {
+    if (arena?.theme.id === t.id) return;
+    arena?.dispose();
+    arena = buildArena(t);
+    stage.scene.add(arena.group);
+    stage.setSky(t.sky, t.bounce);
+  };
+  setTheme(theme);
   const fx = new Fx();
-  stage.scene.add(arena.group, fx.group);
+  stage.scene.add(fx.group);
   const rival = STARTER_IDS.filter((s) => !starters.includes(s));
   const enemyPick: StarterPick = [rival[0] ?? 'bulbasaur', starters[0]];
   const towers: TowerView[] = [];
@@ -32,7 +47,7 @@ export function createDiorama(host: HTMLElement, starters: StarterPick): { dispo
   stage.onFrame((dt, t) => {
     ctx.dt = dt;
     ctx.t = t;
-    arena.update(dt, t);
+    arena?.update(dt, t);
     for (const tw of towers) tw.update(ctx);
     fx.setViewport(host.clientHeight, stage.camera.fov);
     fx.update(dt);
@@ -46,5 +61,11 @@ export function createDiorama(host: HTMLElement, starters: StarterPick): { dispo
     }
   });
   stage.start();
-  return { dispose: () => stage.dispose() };
+  return {
+    setTheme,
+    dispose: () => {
+      arena?.dispose();
+      stage.dispose();
+    },
+  };
 }

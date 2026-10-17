@@ -91,5 +91,7 @@ export const BattleState = schema({
   twist: t.string(),
   /** Seconds of regular time, so the timer reads right before the start (0 if unknown). */
   regularSeconds: t.uint16(),
+  /** Ladder arena (1-based) the mode puts the battle in, e.g. a gym's; 0 = the higher-ranked player's. */
+  arena: t.uint8(),
 }, 'BattleState');
 export type BattleState = SchemaType<typeof BattleState>;

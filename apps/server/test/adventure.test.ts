@@ -77,7 +77,8 @@ describe('League', () => {
   it('a first clear earns the badge, unlocks its cards and opens the next stage', async () => {
     const me = await newProfile('Leaguer');
     const { room, summary } = await adventure(me.credential, { kind: 'league', stage: 'brock' });
-    expect(room.state.toJSON()).toMatchObject({ mode: 'league', title: 'Brock · Pewter Gym', twist: expect.stringContaining('40%') });
+    // Fought in Pewter Gym's arena (3), whatever the player's trophies.
+    expect(room.state.toJSON()).toMatchObject({ mode: 'league', title: 'Brock · Pewter Gym', twist: expect.stringContaining('40%'), arena: 3 });
     const bot = [...room.state.players.values()].find((p) => p.bot)!;
     expect(bot.name).toBe('Brock');
     // His twist: towers with 40% more HP.
@@ -98,6 +99,7 @@ describe('League', () => {
     // Misty is open now.
     const next = await adventure(me.credential, { kind: 'league', stage: 'misty' });
     expect(next.room.state.title).toContain('Misty');
+    expect(next.room.state.arena).toBe(4);
   });
 
   it('stages open in order, and need a profile', async () => {
@@ -145,6 +147,8 @@ describe('Daily Challenge', () => {
     const me = await newProfile('Daily');
     const { room, summary } = await adventure(me.credential, { kind: 'daily' });
     expect(room.state.title).toBe(`Daily: ${challenge.title}`);
+    // Not a League stage: the arena follows the players' trophies.
+    expect(room.state.arena).toBe(0);
     const mine = matchOf(room).players[0];
     expect(new Set([...mine.hand, ...mine.queue])).toEqual(new Set(challenge.deck));
     expect(room['plan'].seed).toBe(challenge.seed);
