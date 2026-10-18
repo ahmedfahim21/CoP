@@ -16,7 +16,7 @@ def build() -> Model:
     m.bone('armR', (-0.74, 1.25, 0.08), 'body')
     m.bone('head', (0, 1.6, 0.06), 'body')
     m.blob('body', (0, 0.95, 0), (0.82, 0.85, 0.7), TEAL)
-    m.blob('body', (0, 0.9, 0.2), (0.68, 0.7, 0.52), CREAM)
+    m.blob('body', (0, 0.88, 0.26), (0.66, 0.68, 0.52), CREAM)
     # The head sits on the body as its own mass, so the cream face stays readable.
     m.blob('head', (0, 1.86, 0.1), (0.5, 0.4, 0.42), TEAL, family='head')
     m.blob('head', (0, 1.8, 0.26), (0.42, 0.32, 0.3), CREAM, family='head')

@@ -34,9 +34,9 @@ Clash Royale–style Pokémon battles, live in your browser. Your king tower is 
 - **Progression**: trainer XP and levels, daily quests, win streaks, and card unlocks by level or League badge. Profiles from before this update keep every card.
 - **Replays**: every battle is recorded (a seed plus the plays) and can be rewatched from match history or shared by link.
 - **Monthly seasons**: on the 1st, each trainer's final trophies and rank go on their profile.
-- **27 Pokémon cards** with Clash Royale–style specialities (evolution, digging, invisibility, healing, chain lightning…) and the real type chart.
+- **33 Pokémon cards** with Clash Royale–style specialities (evolution, digging, invisibility, healing, chain lightning…) and the real type chart.
 - **Starter towers**: pick two of Bulbasaur, Charmander and Squirtle to guard your side.
-- **3D arena** with Blender-built, animated models, cel shading and ink outlines.
+- **3D arena** with toy-like, Blender-built animated models (big heads, stubby limbs), cel shading and ink outlines.
 - **Chiptune sound**: synthesized 8-bit effects and Gen I cries.
 - **No sign-up**: your trainer lives in the browser, and a restore code moves it between devices.
 
@@ -115,7 +115,7 @@ While `pnpm dev` runs, `/sandbox.html` stages scripted fights for tuning animati
 | | |
 |---|---|
 | XP | Every battle pays XP: more for a win, plus a crown bonus, the first win of the day, a streak bonus and quests. Level *n* needs 80 + 40·*n* XP, up to level 30. |
-| Cards | New trainers start with 15 of the 27 cards. The rest unlock in small batches at trainer levels 2 to 6 (legendaries last), and League first clears open some early. |
+| Cards | New trainers start with 15 of the 33 cards. The rest unlock in small batches at trainer levels 2 to 6 (legendaries last), and League first clears open some early. |
 | Quests | Three a day (UTC), drawn from your profile ID and the date, so they're the same on every device. |
 | Stars | 1 for beating a stage, 1 more for losing no tower, 1 more for three crowns. |
 | Arenas | Ten, from Pallet Town (0 trophies) to the Indigo Plateau (1,600). A League stage is fought in its gym's arena (the Elite Four and Champion on the Indigo Plateau); any other battle in the higher-ranked player's. |

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CARD_IDS, FORMS, STARTER_IDS } from '@cop/shared';
 import { RIG_NAMES } from './names.js';
 
 /**
@@ -30,6 +31,11 @@ describe('character models', () => {
     expect(Object.keys(manifest).sort()).toEqual([...RIG_NAMES].sort());
   });
 
+  it('every card, evolved form and starter has a model', () => {
+    const rigs = new Set<string>(RIG_NAMES);
+    for (const id of [...CARD_IDS, ...Object.keys(FORMS), ...STARTER_IDS]) expect(rigs.has(id), id).toBe(true);
+  });
+
   it.each([...RIG_NAMES])('%s is a skinned, vertex-coloured model with its clips and muzzle', (name) => {
     const info = manifest[name]!;
     const j = gltfJson(name);
@@ -54,6 +60,7 @@ describe('character models', () => {
     expect(manifest.rapidash!.clips).toContain('leap');
     expect(manifest.hitmonlee!.clips).toContain('leap');
     expect(manifest.tauros!.clips).toContain('charge');
+    expect(manifest.arcanine!.clips).toContain('charge');
     expect(manifest.chansey!.clips).toContain('special');
     expect(manifest.magikarp!.clips).toContain('special');
     expect(manifest.red!.clips).toContain('dormant');

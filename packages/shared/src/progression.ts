@@ -89,11 +89,11 @@ export const STARTER_CARDS: readonly CardId[] = [
  * the legendaries come last. The League unlocks them sooner: each stage's first clear grants its own.
  */
 export const UNLOCK_SCHEDULE: ReadonlyArray<{ level: number; cards: readonly CardId[] }> = [
-  { level: 2, cards: ['starmie', 'koffing'] },
-  { level: 3, cards: ['mrmime', 'rapidash'] },
-  { level: 4, cards: ['tauros', 'magneton', 'golem'] },
-  { level: 5, cards: ['gengar', 'hitmonlee'] },
-  { level: 6, cards: ['moltres', 'articuno', 'zapdos'] },
+  { level: 2, cards: ['starmie', 'koffing', 'exeggcute'] },
+  { level: 3, cards: ['mrmime', 'rapidash', 'jigglypuff'] },
+  { level: 4, cards: ['tauros', 'magneton', 'golem', 'vileplume'] },
+  { level: 5, cards: ['gengar', 'hitmonlee', 'cloyster', 'arcanine'] },
+  { level: 6, cards: ['moltres', 'articuno', 'zapdos', 'dragonite'] },
 ];
 /** Every level-locked card, in unlock order. */
 export const LEVEL_UNLOCKS: readonly CardId[] = UNLOCK_SCHEDULE.flatMap((u) => u.cards);

@@ -227,11 +227,16 @@ class Model:
 
     def eye(self, bone, pos, r, *, sclera=False, iris=None, yaw=0.0, tall=1.3, pitch=0.0, on=None, family='body'):
         """A Pokémon eye: glossy dark oval with a catchlight, optionally white and coloured iris.
-        `on` (a point inside the head) seats it on the head's real surface."""
+        `on` (a point inside the head) seats it on the head's real surface. The house style
+        draws every eye a bit bigger than asked."""
+        r *= STYLE['eyes']
         if on is not None:
             with self.on(on, pos, sink=r * 0.18, family=family):
-                self.eye(bone, pos, r, sclera=sclera, iris=iris, yaw=yaw, tall=tall, pitch=pitch)
+                self._eye(bone, pos, r, sclera, iris, yaw, tall, pitch)
             return
+        self._eye(bone, pos, r, sclera, iris, yaw, tall, pitch)
+
+    def _eye(self, bone, pos, r, sclera, iris, yaw, tall, pitch):
         with self.frame(pos, (pitch, yaw, 0)):
             if sclera:
                 self.sphere(bone, (0, 0, -r * 0.25), (r * 1.25, r * 1.25 * tall, r * 0.55), 0xf7f7f2, material='gloss')
@@ -562,12 +567,159 @@ def _bake_clips(model: Model, arm):
         pb.scale = (1, 1, 1)
 
 
+# --------------------------------------------------------------------------- house style
+#
+# A toy-like, "ranch" look applied to every species after it is described: a bigger head,
+# shorter and stubbier limbs, smoother surfaces, bigger eyes. The model is then
+# scaled back to the height it was designed at, so footprints and hit boxes don't change.
+
+STYLE = {
+    'head': 1.3,  # head (and everything riding on it) grows about the neck
+    'limbs': 0.82,  # limbs get shorter about their joint, keeping their thickness
+    'girth': 1.12,  # limbs swell as they shorten: stubby, not spindly
+    'eyes': 1.2,  # on top of the head growth
+}
+# Heavyweights and serpents read better with a smaller boost: a huge head on Snorlax or at the
+# end of Gyarados's neck looks like a different Pokémon.
+STYLE_OVERRIDES = {
+    'snorlax': {'head': 1.1},
+    'gyarados': {'head': 1.12},
+}
+LIMB_PREFIXES = ('leg', 'arm', 'fore', 'foot', 'hand')
+# Where the head is the whole body (Voltorb, Koffing…) there is nothing to exaggerate.
+HEAD_SHARE_MAX = 0.55
+
+
+def _subtree(model: Model, root: str) -> set[str]:
+    out = {root}
+    grew = True
+    while grew:
+        grew = False
+        for name, (_, parent) in model.bones.items():
+            if parent in out and name not in out:
+                out.add(name)
+                grew = True
+    return out
+
+
+def _blob_volume(b: Blob) -> float:
+    if b.kind == 'CAPSULE':
+        r, half = b.radii.x, b.radii.y
+        return math.pi * r * r * (2 * half + 4 / 3 * r)
+    return 4 / 3 * math.pi * b.radii.x * b.radii.y * b.radii.z
+
+
+def _blob_bottom(b: Blob) -> float:
+    col = [b.rot[1][j] for j in range(3)]  # world-y row of the orientation
+    if b.kind == 'CAPSULE':
+        return b.center.y - abs(col[1]) * b.radii.y - b.radii.x
+    return b.center.y - math.sqrt(sum((col[j] * b.radii[j]) ** 2 for j in range(3)))
+
+
+def _blob_top(b: Blob) -> float:
+    return 2 * b.center.y - _blob_bottom(b)
+
+
+def _extent(model: Model) -> tuple[float, float]:
+    lows = [_blob_bottom(b) for b in model.blobs] + [v.y for d in model.details for v in d.verts]
+    highs = [_blob_top(b) for b in model.blobs] + [v.y for d in model.details for v in d.verts]
+    return min(lows), max(highs)
+
+
+def _scale_about(model: Model, bones: set[str], pivot: Vector, k: float, keep_thickness: bool = False):
+    """Scales the parts on `bones` about `pivot`. With keep_thickness, blobs only get shorter."""
+    move = lambda p: pivot + (p - pivot) * k  # noqa: E731
+    for name in bones:
+        head, parent = model.bones[name]
+        model.bones[name] = (move(head), parent)
+    for b in model.blobs:
+        if b.bone not in bones:
+            continue
+        b.center = move(b.center)
+        if not keep_thickness:
+            b.radii = b.radii * k
+        elif b.kind == 'CAPSULE':
+            b.radii = Vector((b.radii.x, b.radii.y * k, b.radii.z))
+    for d in model.details:
+        if d.bone not in bones:
+            continue
+        d.verts = [move(v) for v in d.verts]
+        if d.snap:
+            origin, anchor, sink, family = d.snap
+            d.snap = (move(origin), move(anchor), sink * k, family)
+    for name, (bone, pos) in list(model.empties.items()):
+        if bone in bones:
+            model.empties[name] = (bone, move(pos))
+
+
+def stylize(model: Model):
+    style = {**STYLE, **STYLE_OVERRIDES.get(model.name, {})}
+    _, top0 = _extent(model)
+    low0, _ = _extent(model)
+    grounded = low0 <= model.height * 0.06
+    total = sum(_blob_volume(b) for b in model.blobs) or 1.0
+
+    if 'head' in model.bones:
+        head = _subtree(model, 'head')
+        share = sum(_blob_volume(b) for b in model.blobs if b.bone in head) / total
+        if share < HEAD_SHARE_MAX:
+            _scale_about(model, head, model.bones['head'][0].copy(), style['head'])
+
+    limbs: set[str] = set()
+    for name in list(model.bones):
+        if name.startswith(LIMB_PREFIXES) and model.bones[name][1] and not model.bones[name][1].startswith(LIMB_PREFIXES):
+            limb = _subtree(model, name)
+            limbs |= limb
+            _scale_about(model, limb, model.bones[name][0].copy(), style['limbs'], keep_thickness=True)
+
+    # Only limbs swell: body blobs often carry colour patches (bellies, faces) that sit just
+    # proud of the body, and swelling everything would bury them.
+    for b in model.blobs:
+        if b.bone in limbs:
+            b.radii = Vector((b.radii.x * style['girth'], b.radii.y if b.kind == 'CAPSULE' else b.radii.y * style['girth'], b.radii.z * style['girth']))
+
+    # Shorter legs leave feet in the air: set the model back down.
+    low1, _ = _extent(model)
+    if grounded and abs(low1 - low0) > 1e-4:
+        shift = Vector((0, low0 - low1, 0))
+        for name, (head, parent) in model.bones.items():
+            model.bones[name] = (head + shift, parent)
+        for b in model.blobs:
+            b.center = b.center + shift
+        for d in model.details:
+            d.verts = [v + shift for v in d.verts]
+            if d.snap:
+                origin, anchor, sink, family = d.snap
+                d.snap = (origin + shift, anchor + shift, sink, family)
+        for name, (bone, pos) in list(model.empties.items()):
+            model.empties[name] = (bone, pos + shift)
+
+    # Back to the designed height, about the feet.
+    low2, top2 = _extent(model)
+    k = (top0 - low0) / (top2 - low2)
+    if abs(k - 1) > 1e-4:
+        _scale_about(model, set(model.bones), Vector((0, low2, 0)), k)
+        for c in model.clips:
+            c.fn = _scaled_clip(c.fn, k)
+
+
+def _scaled_clip(fn, k: float):
+    """Clip offsets are in model units, so they shrink with the model."""
+
+    def wrapped(u):
+        pose = fn(u)
+        return {bone: ({**key, 'loc': tuple(x * k for x in key['loc'])} if 'loc' in key else key) for bone, key in pose.items()}
+
+    return wrapped
+
+
 def build(model: Model, out_path: str) -> dict:
     _reset()
     assert 'root' in model.bones, 'every model needs a root bone'
     assert any(c.name == 'idle' for c in model.clips), f'{model.name}: needs an idle clip'
+    stylize(model)
     arm = _armature(model)
-    res = model.resolution or model.height / 38
+    res = model.resolution or model.height / 44
     families: dict[str, list[Blob]] = {}
     for b in model.blobs:
         families.setdefault(b.family, []).append(b)

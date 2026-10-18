@@ -40,7 +40,7 @@ export const STAGES: readonly Stage[] = [
   {
     id: 'brock', order: 1, leader: 'Brock', title: 'Pewter Gym', badge: 'Boulder Badge', type: 'rock', arena: 3,
     deck: ['geodude', 'golem', 'dugtrio', 'machop', 'rattata', 'primeape', 'snorlax', 'zubat'], starters: ['bulbasaur', 'squirtle'],
-    skill: 0.1, twist: 'Rock solid: his towers have 40% more HP.', hint: 'Water and fighting crack rock: Lapras and Machop hit his team hard.', foe: { towerHp: 1.4 }, long: false, unlocks: ['golem'],
+    skill: 0.1, twist: 'Rock solid: his towers have 40% more HP.', hint: 'Water and fighting crack rock: Lapras and Machop hit his team hard.', foe: { towerHp: 1.4 }, long: false, unlocks: ['golem', 'jigglypuff'],
   },
   {
     id: 'misty', order: 2, leader: 'Misty', title: 'Cerulean Gym', badge: 'Cascade Badge', type: 'water', arena: 4,
@@ -54,8 +54,8 @@ export const STAGES: readonly Stage[] = [
   },
   {
     id: 'erika', order: 4, leader: 'Erika', title: 'Celadon Gym', badge: 'Rainbow Badge', type: 'grass', arena: 6,
-    deck: ['scyther', 'chansey', 'tauros', 'zubat', 'koffing', 'mrmime', 'rattata', 'lapras'], starters: ['bulbasaur', 'charmander'],
-    skill: 0.45, twist: 'Sweet scent: her elixir flows 15% faster.', hint: 'Fire and flying burn through her team: Charizard is your friend.', foe: { elixirRate: 1.15 }, long: false, unlocks: ['tauros'],
+    deck: ['scyther', 'chansey', 'tauros', 'zubat', 'koffing', 'mrmime', 'vileplume', 'lapras'], starters: ['bulbasaur', 'charmander'],
+    skill: 0.45, twist: 'Sweet scent: her elixir flows 15% faster.', hint: 'Fire and flying burn through her team: Charizard is your friend.', foe: { elixirRate: 1.15 }, long: false, unlocks: ['tauros', 'vileplume'],
   },
   {
     id: 'koga', order: 5, leader: 'Koga', title: 'Fuchsia Gym', badge: 'Soul Badge', type: 'poison', arena: 7,
@@ -64,14 +64,14 @@ export const STAGES: readonly Stage[] = [
   },
   {
     id: 'sabrina', order: 6, leader: 'Sabrina', title: 'Saffron Gym', badge: 'Marsh Badge', type: 'psychic', arena: 8,
-    deck: ['mrmime', 'starmie', 'gengar', 'machop', 'magikarp', 'chansey', 'zubat', 'pikachu'], starters: ['squirtle', 'charmander'],
-    skill: 0.3, twist: 'Barrier: her towers have 10% more HP.', hint: 'Psychic crushes fighting and poison. Bring ghost or bug: Gengar and Scyther.', foe: { towerHp: 1.1 }, long: false, unlocks: ['mrmime', 'hitmonlee'],
+    deck: ['mrmime', 'starmie', 'gengar', 'machop', 'magikarp', 'chansey', 'exeggcute', 'pikachu'], starters: ['squirtle', 'charmander'],
+    skill: 0.3, twist: 'Barrier: her towers have 10% more HP.', hint: 'Psychic crushes fighting and poison. Bring ghost or bug: Gengar and Scyther.', foe: { towerHp: 1.1 }, long: false, unlocks: ['mrmime', 'hitmonlee', 'exeggcute'],
   },
   {
     id: 'blaine', order: 7, leader: 'Blaine', title: 'Cinnabar Gym', badge: 'Volcano Badge', type: 'fire', arena: 9,
-    deck: ['rapidash', 'moltres', 'charizard', 'tauros', 'koffing', 'voltorb', 'zubat', 'golem'], starters: ['charmander', 'bulbasaur'],
+    deck: ['rapidash', 'moltres', 'charizard', 'arcanine', 'koffing', 'voltorb', 'zubat', 'golem'], starters: ['charmander', 'bulbasaur'],
     skill: 0.75, twist: 'Heatwave: his troops hit 15% harder and his towers have 20% more HP.', hint: 'Water and rock douse fire: Lapras, Starmie and Golem.', foe: { unitDamage: 1.15, towerHp: 1.2 },
-    long: false, unlocks: ['rapidash', 'moltres'],
+    long: false, unlocks: ['rapidash', 'moltres', 'arcanine'],
   },
   {
     id: 'giovanni', order: 8, leader: 'Giovanni', title: 'Viridian Gym', badge: 'Earth Badge', type: 'ground', arena: 2,
@@ -81,9 +81,9 @@ export const STAGES: readonly Stage[] = [
   },
   {
     id: 'lorelei', order: 9, leader: 'Lorelei', title: 'Elite Four', badge: 'Ice Crest', type: 'ice', arena: 10,
-    deck: ['articuno', 'lapras', 'machop', 'magikarp', 'dugtrio', 'zubat', 'mrmime', 'golem'], starters: ['squirtle', 'bulbasaur'],
+    deck: ['articuno', 'lapras', 'cloyster', 'magikarp', 'dugtrio', 'zubat', 'mrmime', 'golem'], starters: ['squirtle', 'bulbasaur'],
     skill: 0.8, twist: 'Blizzard: her troops have 10% more HP, and the cold slows yours by 5%.', hint: 'Fire, fighting and rock melt ice: Rapidash, Hitmonlee and Golem.', foe: { unitHp: 1.1 }, you: { unitSpeed: 0.95 },
-    long: true, unlocks: ['articuno'],
+    long: true, unlocks: ['articuno', 'cloyster'],
   },
   {
     id: 'bruno', order: 10, leader: 'Bruno', title: 'Elite Four', badge: 'Fist Crest', type: 'fighting', arena: 10,
@@ -98,9 +98,9 @@ export const STAGES: readonly Stage[] = [
   },
   {
     id: 'lance', order: 12, leader: 'Lance', title: 'Elite Four', badge: 'Dragon Crest', type: 'dragon', arena: 10,
-    deck: ['magikarp', 'charizard', 'moltres', 'zapdos', 'articuno', 'lapras', 'dugtrio', 'rattata'], starters: ['charmander', 'squirtle'],
+    deck: ['magikarp', 'charizard', 'moltres', 'zapdos', 'articuno', 'lapras', 'dugtrio', 'dragonite'], starters: ['charmander', 'squirtle'],
     skill: 0.8, twist: 'Dragon dance: his troops have 10% more HP.', hint: 'His fliers hate electric and ice: Jolteon, Magneton and Articuno.', foe: { unitHp: 1.1 },
-    long: true, unlocks: [],
+    long: true, unlocks: ['dragonite'],
   },
   {
     id: 'blue', order: 13, leader: 'Blue', title: 'Champion', badge: 'Champion Ribbon', type: 'normal', arena: 10,
