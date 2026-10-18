@@ -85,6 +85,7 @@ export const CARD_IDS = [
   'rattata', 'zubat', 'voltorb', 'pikachu', 'machop', 'lapras', 'charizard', 'snorlax',
   'magikarp', 'geodude', 'dugtrio', 'gengar', 'chansey', 'scyther', 'jolteon', 'rapidash', 'tauros', 'articuno', 'moltres',
   'primeape', 'mrmime', 'magneton', 'starmie', 'koffing', 'golem', 'hitmonlee', 'zapdos',
+  'exeggcute', 'jigglypuff', 'vileplume', 'cloyster', 'arcanine', 'dragonite',
 ] as const;
 export type CardId = (typeof CARD_IDS)[number];
 
@@ -222,6 +223,36 @@ export const CARDS: Record<CardId, CardDef> = {
     id: 'zapdos', name: 'Zapdos', dex: 145, cost: 5, count: 1, rarity: 'legendary',
     special: { name: 'Chain Lightning', text: 'Thunder arcs from its target to two more enemies, stunning each for a moment.' },
     stats: { ...MELEE, hp: 1050, damage: 150, hitSpeed: 2, range: 4, sightRange: 5.5, speed: 1, radius: 0.6, flying: true, targets: 'air-ground', types: ['electric', 'flying'], move: { name: 'Thunder', type: 'electric' }, ability: { kind: 'chain', jumps: 2, range: 4, stun: 0.4 } },
+  },
+  exeggcute: {
+    id: 'exeggcute', name: 'Exeggcute', dex: 102, cost: 3, count: 3, rarity: 'common',
+    special: { name: 'Egg Trio', text: 'Three egg pairs that pelt anything in range, fliers included.' },
+    stats: { ...MELEE, hp: 260, damage: 70, hitSpeed: 1.2, range: 4.5, sightRange: 5.5, speed: 1, radius: 0.35, flying: false, targets: 'air-ground', types: ['grass', 'psychic'], move: { name: 'Bullet Seed', type: 'grass' }, projectileSpeed: 9 },
+  },
+  jigglypuff: {
+    id: 'jigglypuff', name: 'Jigglypuff', dex: 39, cost: 3, count: 1, rarity: 'rare',
+    special: { name: 'Sing', text: 'Its song makes whatever it hits drowsy: slower to move and attack for 2 seconds.' },
+    stats: { ...MELEE, hp: 720, damage: 80, hitSpeed: 1.3, range: 4.5, sightRange: 6, speed: 1, radius: 0.45, flying: false, targets: 'air-ground', types: ['normal', 'fairy'], move: { name: 'Sing', type: 'normal' }, projectileSpeed: 8, ability: { kind: 'slow', seconds: 2, factor: 0.6 } },
+  },
+  vileplume: {
+    id: 'vileplume', name: 'Vileplume', dex: 45, cost: 4, count: 1, rarity: 'rare',
+    special: { name: 'Petal Dance', text: 'Showers petals that hit everything around its target.' },
+    stats: { ...MELEE, hp: 820, damage: 150, hitSpeed: 1.5, range: 5, sightRange: 6, speed: 0.75, radius: 0.55, flying: false, targets: 'air-ground', types: ['grass', 'poison'], move: { name: 'Petal Dance', type: 'grass' }, projectileSpeed: 8, splashRadius: 1.3 },
+  },
+  cloyster: {
+    id: 'cloyster', name: 'Cloyster', dex: 91, cost: 4, count: 1, rarity: 'epic',
+    special: { name: 'Shell Armor', text: 'Its shell soaks the first 600 damage before Cloyster takes any.' },
+    stats: { ...MELEE, hp: 850, damage: 120, hitSpeed: 1.1, range: 4.5, sightRange: 6, speed: 0.75, radius: 0.55, flying: false, targets: 'air-ground', types: ['water', 'ice'], move: { name: 'Icicle Spear', type: 'ice' }, projectileSpeed: 11, ability: { kind: 'shield', hp: 600 } },
+  },
+  arcanine: {
+    id: 'arcanine', name: 'Arcanine', dex: 59, cost: 4, count: 1, rarity: 'epic',
+    special: { name: 'Extreme Speed', text: 'A fast runner: after 2 tiles it charges even faster, and its next bite hits twice as hard.' },
+    stats: { ...MELEE, hp: 1100, damage: 160, hitSpeed: 1.2, range: 0.6, speed: 1.5, radius: 0.55, flying: false, targets: 'ground', types: ['fire'], move: { name: 'Fire Fang', type: 'fire' }, ability: { kind: 'charge', afterTiles: 2, speedMult: 1.6, damageMult: 2 } },
+  },
+  dragonite: {
+    id: 'dragonite', name: 'Dragonite', dex: 149, cost: 6, count: 1, rarity: 'legendary',
+    special: { name: 'Outrage', text: 'A flying heavyweight. Below half health it moves and hits much faster.' },
+    stats: { ...MELEE, hp: 2400, damage: 230, hitSpeed: 1.5, range: 0.8, speed: 0.9, radius: 0.75, flying: true, targets: 'air-ground', types: ['dragon', 'flying'], move: { name: 'Outrage', type: 'dragon' }, ability: { kind: 'rage', below: 0.5, speedMult: 1.4, hitSpeedMult: 0.6 } },
   },
 };
 

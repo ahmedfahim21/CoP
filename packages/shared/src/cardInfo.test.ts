@@ -31,7 +31,8 @@ describe('card info', () => {
       for (const m of info.strongAgainst) expect(DEFENDING_TYPES).toContain(m.type);
       for (const m of [...info.weakAgainst, ...info.resists]) expect(ATTACKING_TYPES).toContain(m.type);
     }
-    expect(DEFENDING_TYPES).not.toContain('dragon');
+    // No card is dark type, so nothing should claim to beat it.
+    expect(DEFENDING_TYPES).not.toContain('dark');
     expect(cardInfo('magikarp').strongAgainst).toEqual([]);
   });
 

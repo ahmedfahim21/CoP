@@ -70,8 +70,8 @@ describe('card unlocks', () => {
     for (let l = 1; l < LAST_UNLOCK_LEVEL; l++) xp += xpToNext(l);
     expect(unlockedCards({ ...emptyProgress(), xp }).size).toBe(CARD_IDS.length);
     const before = unlockedCards({ ...emptyProgress(), xp: xp - 1 });
-    expect(before.size).toBe(CARD_IDS.length - 3);
-    for (const c of ['moltres', 'articuno', 'zapdos'] as const) expect(before.has(c)).toBe(false);
+    expect(before.size).toBe(CARD_IDS.length - 4);
+    for (const c of ['moltres', 'articuno', 'zapdos', 'dragonite'] as const) expect(before.has(c)).toBe(false);
     // Level 6 is about 1,000 XP: roughly 20-25 battles with quests and first wins.
     expect(xp).toBe(1000);
   });
@@ -104,9 +104,9 @@ describe('League', () => {
   it('first clears unlock cards and pay; better runs add stars', () => {
     const first = applyBattle(emptyProgress(), win({ stage: 'brock', towersLost: 1 }), DAY, 'P');
     expect(first.stars).toEqual({ stage: 'brock', before: 0, after: 1 });
-    // Brock's own card, plus level 2's batch: the clear's XP alone reaches level 2.
+    // Brock's own cards, plus level 2's batch: the clear's XP alone reaches level 2.
     expect(first.levelAfter).toBe(2);
-    expect(first.unlocked.sort()).toEqual(['golem', 'koffing', 'starmie']);
+    expect(first.unlocked.sort()).toEqual(['exeggcute', 'golem', 'jigglypuff', 'koffing', 'starmie']);
     expect(first.rewards.map((r) => r.text)).toContain('Boulder Badge!');
     const again = applyBattle(first.progress, win({ stage: 'brock', crowns: 3 }), DAY, 'P');
     expect(again.stars).toEqual({ stage: 'brock', before: 1, after: 3 });
@@ -181,7 +181,7 @@ describe('daily rewards', () => {
     expect(r.levelBefore).toBe(2);
     expect(r.levelAfter).toBe(3);
     // Exactly level 3's batch; level 2's was already owned.
-    expect(r.unlocked.sort()).toEqual(['mrmime', 'rapidash']);
+    expect(r.unlocked.sort()).toEqual(['jigglypuff', 'mrmime', 'rapidash']);
   });
 
   it('puzzles pay once', () => {
